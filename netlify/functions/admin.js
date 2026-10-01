@@ -115,10 +115,14 @@ export const handler = async (event) => {
         // GET /upi - Get UPI ID (Public endpoint - no auth required)
         if (event.httpMethod === 'GET' && path === '/upi') {
             const setting = await Setting.findOne({ key: 'upiId' });
+            const qrSetting = await Setting.findOne({ key: 'qrImage' });
             return {
                 statusCode: 200,
                 headers,
-                body: JSON.stringify({ upiId: setting?.value || '' }),
+                body: JSON.stringify({ 
+                    upiId: setting?.value || '',
+                    qrImage: qrSetting?.value || null
+                }),
             };
         }
 
@@ -373,13 +377,21 @@ export const handler = async (event) => {
 
         // POST /update-upi - Update UPI ID
         if (event.httpMethod === 'POST' && path === '/update-upi') {
-            const { upiId } = JSON.parse(event.body);
+            const { upiId, qrImage } = JSON.parse(event.body);
 
             await Setting.findOneAndUpdate(
                 { key: 'upiId' },
                 { value: upiId },
                 { upsert: true }
             );
+
+            if (qrImage !== undefined) {
+                await Setting.findOneAndUpdate(
+                    { key: 'qrImage' },
+                    { value: qrImage },
+                    { upsert: true }
+                );
+            }
 
             return {
                 statusCode: 200,

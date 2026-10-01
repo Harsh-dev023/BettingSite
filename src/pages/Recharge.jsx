@@ -6,6 +6,7 @@ export default function Recharge() {
     const [amount, setAmount] = useState('');
     const [transactionId, setTransactionId] = useState('');
     const [upiId, setUpiId] = useState('');
+    const [qrImage, setQrImage] = useState(null);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,6 +19,7 @@ export default function Recharge() {
         try {
             const data = await api.getUPI();
             setUpiId(data.upiId || 'Not set by admin');
+            setQrImage(data.qrImage || null);
         } catch (err) {
             console.error('Failed to load UPI');
         }
@@ -121,7 +123,7 @@ export default function Recharge() {
 
                             <div className="bg-white p-3 rounded-lg shadow-md border-2 border-blue-300">
                                 <img
-                                    src="/image/qr.png"
+                                    src={qrImage || "/image/qr.png"}
                                     alt="UPI QR Code"
                                     className="w-56 h-56 object-contain"
                                 />

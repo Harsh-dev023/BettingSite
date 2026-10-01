@@ -1,10 +1,56 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+
+/** Longest edge of the stored QR. Keeps the base64 small and fast while ensuring scannability. */
+const QR_MAX_EDGE = 640;
+/** Refuse excessively large files before processing */
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Downscales and re-encodes uploaded QR code to a high-contrast, compact PNG data URL.
+ * Keeps document small to prevent exceeding Netlify / Mongo payload limits.
+ */
+async function toDataUrl(file) {
+    const source = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('Could not read that file.'));
+        reader.readAsDataURL(file);
+    });
+
+    const image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('That file is not a valid image.'));
+        img.src = source;
+    });
+
+    const scale = Math.min(1, QR_MAX_EDGE / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not process that image.');
+
+    // Ensure white background so transparent QR codes scan reliably
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    return canvas.toDataURL('image/png');
+}
 
 export default function AdminDashboard() {
     const [result, setResult] = useState('0');
     const [upiId, setUpiId] = useState('');
+    const [qrImage, setQrImage] = useState(null);
+    const [isUpdatingUPI, setIsUpdatingUPI] = useState(false);
+    const [isProcessingQR, setIsProcessingQR] = useState(false);
+    const fileInputRef = useRef(null);
     const [users, setUsers] = useState([]);
     const [searchPhone, setSearchPhone] = useState('');
     const [recharges, setRecharges] = useState([]);
@@ -26,6 +72,7 @@ export default function AdminDashboard() {
         try {
             const upiData = await api.getUPI();
             setUpiId(upiData.upiId || '');
+            setQrImage(upiData.qrImage || null);
 
             const usersData = await api.getUsers();
             if (!usersData.error) setUsers(usersData.users);
@@ -62,15 +109,49 @@ export default function AdminDashboard() {
     const handleUpdateUPI = async () => {
         setError('');
         setMessage('');
+        setIsUpdatingUPI(true);
         try {
-            const data = await api.updateUPI(upiId);
+            const data = await api.updateUPI(upiId, qrImage);
             if (data.error) {
                 setError(data.error);
             } else {
-                setMessage('UPI ID updated successfully!');
+                setMessage('UPI ID and QR updated successfully!');
             }
         } catch (err) {
             setError('Failed to update UPI');
+        } finally {
+            setIsUpdatingUPI(false);
+        }
+    };
+
+    const handleQrUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > MAX_UPLOAD_BYTES) {
+            setError('That image is over 8 MB. Please take a smaller screenshot or photo.');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        setError('');
+        setIsProcessingQR(true);
+        try {
+            const dataUrl = await toDataUrl(file);
+            setQrImage(dataUrl);
+            setMessage('QR code processed. Click "Update UPI & QR" to save.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Could not process image.');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } finally {
+            setIsProcessingQR(false);
+        }
+    };
+
+    const handleRemoveQr = () => {
+        setQrImage(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
@@ -201,20 +282,52 @@ export default function AdminDashboard() {
                 {/* UPI Settings */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-bold mb-4">UPI Settings</h2>
-                    <div className="flex gap-4">
-                        <input
-                            type="text"
-                            value={upiId}
-                            onChange={(e) => setUpiId(e.target.value)}
-                            placeholder="Enter UPI ID"
-                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
-                        />
-                        <button
-                            onClick={handleUpdateUPI}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
-                        >
-                            Update UPI
-                        </button>
+                    <div className="flex flex-col gap-4">
+                        <div className="flex gap-4">
+                            <input
+                                type="text"
+                                value={upiId}
+                                onChange={(e) => setUpiId(e.target.value)}
+                                placeholder="Enter UPI ID"
+                                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
+                            />
+                            <button
+                                onClick={handleUpdateUPI}
+                                disabled={isUpdatingUPI || isProcessingQR}
+                                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-medium"
+                            >
+                                {isUpdatingUPI ? 'Updating...' : 'Update UPI & QR'}
+                            </button>
+                        </div>
+                        <div className="mt-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">QR Code Image</label>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleQrUpload}
+                                disabled={isProcessingQR || isUpdatingUPI}
+                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
+                            />
+                            {isProcessingQR && (
+                                <p className="text-sm text-blue-600 mt-2 font-medium">Processing and optimizing QR code image...</p>
+                            )}
+                            {qrImage ? (
+                                <div className="mt-4 p-3 bg-gray-50 border rounded-lg inline-block">
+                                    <p className="text-xs text-gray-500 mb-2 font-medium">Active / Selected QR Preview:</p>
+                                    <img src={qrImage} alt="QR Code Preview" className="w-36 h-36 object-contain border rounded bg-white p-1" />
+                                    <button
+                                        type="button"
+                                        onClick={handleRemoveQr}
+                                        className="text-red-600 text-sm mt-2 block hover:underline font-medium"
+                                    >
+                                        Remove QR (Revert to default)
+                                    </button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-500 mt-2">No custom QR set. Default QR image (/image/qr.png) will be shown to users.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
