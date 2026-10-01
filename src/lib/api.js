@@ -177,12 +177,12 @@ export const api = {
         return res.json();
     },
 
-    updateUPI: async (upiId) => {
+    updateUPI: async (upiId, qrImage) => {
         const res = await fetch(`${API_BASE}/admin/update-upi`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ upiId }),
+            body: JSON.stringify({ upiId, qrImage }),
         });
         return res.json();
     },
