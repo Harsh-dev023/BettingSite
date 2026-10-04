@@ -20,11 +20,23 @@ async function connectDB() {
     }
 
     if (!cached.promise || mongoose.connection.readyState === 0) {
+        // Serverless-optimized options for Netlify + MongoDB Atlas
         const opts = {
-            maxPoolSize: 10,
-            serverSelectionTimeoutMS: 5000,
+            maxPoolSize: 1,                  // Serverless: 1 connection per function instance
+            minPoolSize: 0,                  // Allow pool to drain when completely idle
+            serverSelectionTimeoutMS: 10000, // Fail fast if Atlas is unreachable
             socketTimeoutMS: 45000,
+            connectTimeoutMS: 10000,
+            maxIdleTimeMS: 45000,            // Keep connection alive across active rounds (30-45s)
+            heartbeatFrequencyMS: 30000,
+            retryWrites: true,
+            retryReads: true,
         };
+
+        // Reset any stale connection before reconnecting
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.disconnect();
+        }
 
         cached.promise = mongoose.connect(uri, opts).then((m) => m);
     }
