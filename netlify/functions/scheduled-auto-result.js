@@ -1,4 +1,4 @@
-import { connectDB, Round } from './utils/db.js';
+import { connectDB, Round, Bet } from './utils/db.js';
 import { getColor, getSize, calculateWinnings } from './utils/game-helpers.js';
 
 const headers = {
