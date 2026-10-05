@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
 export default function Recharge() {
@@ -10,6 +10,7 @@ export default function Recharge() {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         loadUPI();
@@ -54,139 +55,135 @@ export default function Recharge() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-4">
-                <div className="max-w-4xl mx-auto">
-                    <h1 className="text-2xl font-bold">Recharge</h1>
+        <div className="min-h-screen bg-[#08080c] text-gray-200 pb-28 pt-4 px-4 sm:px-6">
+            <div className="max-w-2xl mx-auto space-y-5">
+                {/* Header */}
+                <div className="flex items-center justify-between py-2 border-b border-[#252233]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-black font-serif-gold font-black text-xl">
+                            ⚜
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black font-serif-gold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 tracking-wider">
+                                DEPOSIT RECHARGE
+                            </h1>
+                            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">
+                                Instant Balance Credit
+                            </p>
+                        </div>
+                    </div>
+                    <Link
+                        to="/game"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#181624] border border-amber-500/30 text-amber-300 text-xs font-semibold hover:border-amber-400 transition"
+                    >
+                        ← Back to Game
+                    </Link>
                 </div>
-            </div>
 
-            <div className="max-w-4xl mx-auto p-4">
-
-                {/* Promotional Banner */}
-                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg shadow-lg p-6 mb-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                        <span className="text-3xl">🎉</span>
-
-                        <h2 className="text-2xl font-bold text-white">
+                {/* Promotional Bonus Banner */}
+                <div className="bg-gradient-to-r from-amber-950/60 via-amber-900/40 to-yellow-950/60 border border-amber-500/40 rounded-2xl p-5 shadow-xl relative overflow-hidden text-center">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                        <span className="text-2xl">🎉</span>
+                        <h2 className="text-xl font-bold font-serif-gold text-amber-300 tracking-wide">
                             First Recharge Bonus!
                         </h2>
-
-                        <span className="text-3xl">🎉</span>
+                        <span className="text-2xl">🎉</span>
                     </div>
 
-                    <p className="text-white text-lg font-semibold mb-2">
+                    <p className="text-amber-200/90 text-sm font-medium mb-3">
                         Get 20% Bonus on Your First Recharge!
                     </p>
 
-                    <div className="bg-white bg-opacity-20 rounded-lg p-3 inline-block">
-                        <p className="text-white text-xl font-bold">
+                    <div className="bg-[#12111a]/80 border border-amber-500/30 rounded-xl px-4 py-2 inline-block">
+                        <p className="text-amber-300 text-lg font-black font-num">
                             ₹10000 → ₹12,000
                         </p>
                     </div>
 
-                    <p className="text-white text-sm mt-2 opacity-90">
+                    <p className="text-gray-400 text-xs mt-2">
                         Double your first deposit instantly!
                     </p>
                 </div>
 
                 {/* Main Card */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-
+                <div className="bg-[#12111a] border border-[#2a2538] rounded-2xl shadow-2xl p-6 space-y-5">
                     {/* UPI Payment Section */}
-                    <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-300">
-
-                        <p className="text-sm text-gray-600 mb-3 text-center font-semibold">
-                            💳 Send Payment To:
+                    <div className="p-5 bg-[#171524] rounded-xl border border-[#322d45] space-y-4">
+                        <p className="text-xs font-semibold text-gray-300 text-center uppercase tracking-wider">
+                            💳 Send Payment To UPI
                         </p>
 
                         {/* UPI ID */}
-                        <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-blue-400">
-                            <p className="text-center">
-                                <span className="text-xs text-gray-500 block mb-1">
-                                    UPI ID
-                                </span>
-
-                                <span className="text-2xl font-bold text-blue-600 break-all select-all">
-                                    {upiId}
-                                </span>
-                            </p>
+                        <div className="bg-[#0f0e17] rounded-xl p-3.5 border border-amber-500/30 text-center">
+                            <span className="text-[10px] text-gray-400 block mb-1 uppercase tracking-wider">
+                                Admin UPI ID
+                            </span>
+                            <span className="text-lg sm:text-xl font-bold font-num text-amber-300 break-all select-all tracking-wide">
+                                {upiId}
+                            </span>
                         </div>
 
                         {/* QR Code */}
-                        <div className="mt-5 flex flex-col items-center">
-
-                            <p className="text-sm font-semibold text-gray-700 mb-3">
+                        <div className="flex flex-col items-center pt-2">
+                            <p className="text-xs font-semibold text-gray-300 mb-3 uppercase tracking-wider">
                                 📱 Scan QR Code to Pay
                             </p>
-
-                            <div className="bg-white p-3 rounded-lg shadow-md border-2 border-blue-300">
+                            <div className="bg-white p-3 rounded-2xl shadow-xl border-4 border-amber-500/40">
                                 <img
                                     src={qrImage || "/image/qr.png"}
                                     alt="UPI QR Code"
-                                    className="w-56 h-56 object-contain"
+                                    className="w-52 h-52 object-contain"
                                 />
                             </div>
-
                         </div>
 
-                        <p className="text-sm text-gray-600 mt-4 text-center">
-                            📝 After payment, enter transaction details below
+                        <p className="text-xs text-gray-400 text-center pt-1">
+                            📝 After payment, enter amount and UPI Ref/UTR number below
                         </p>
                     </div>
 
-                    {/* Success Message */}
+                    {/* Messages */}
                     {message && (
-                        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                        <div className="bg-emerald-950/60 border border-emerald-600/50 text-emerald-300 px-4 py-3 rounded-xl text-sm font-medium">
                             {message}
                         </div>
                     )}
-
-                    {/* Error Message */}
                     {error && (
-                        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                        <div className="bg-red-950/60 border border-red-600/50 text-red-300 px-4 py-3 rounded-xl text-sm font-medium">
                             {error}
                         </div>
                     )}
 
                     {/* Recharge Form */}
                     <form onSubmit={handleSubmit} className="space-y-4">
-
                         {/* Amount */}
                         <div>
-                            <label className="block text-gray-700 mb-2">
-                                Amount
+                            <label className="block text-xs font-semibold text-gray-300 tracking-wider uppercase mb-1.5">
+                                Recharge Amount (₹)
                             </label>
-
                             <input
                                 type="number"
                                 value={amount}
-                                onChange={(e) =>
-                                    setAmount(e.target.value)
-                                }
-                                placeholder="Enter amount"
+                                onChange={(e) => setAmount(e.target.value)}
+                                placeholder="Enter amount (e.g. 500)"
                                 min="1"
                                 required
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className="w-full px-4 py-3 rounded-xl bg-[#161422] border border-[#302c40] text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 font-num font-semibold text-base transition"
                             />
                         </div>
 
                         {/* Transaction ID */}
                         <div>
-                            <label className="block text-gray-700 mb-2">
-                                Transaction ID
+                            <label className="block text-xs font-semibold text-gray-300 tracking-wider uppercase mb-1.5">
+                                Transaction ID / UTR
                             </label>
-
                             <input
                                 type="text"
                                 value={transactionId}
-                                onChange={(e) =>
-                                    setTransactionId(e.target.value)
-                                }
-                                placeholder="Enter UPI transaction ID"
+                                onChange={(e) => setTransactionId(e.target.value)}
+                                placeholder="Enter 12-digit UPI reference number"
                                 required
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className="w-full px-4 py-3 rounded-xl bg-[#161422] border border-[#302c40] text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 font-num transition"
                             />
                         </div>
 
@@ -194,23 +191,57 @@ export default function Recharge() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition"
+                            className="w-full py-4 rounded-xl font-extrabold tracking-widest uppercase text-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 shadow-xl shadow-amber-500/20 hover:brightness-110 active:scale-98 disabled:opacity-50 transition duration-150"
                         >
-                            {loading
-                                ? 'Submitting...'
-                                : 'Submit Request'}
+                            {loading ? 'SUBMITTING REQUEST...' : 'SUBMIT RECHARGE REQUEST'}
                         </button>
-
                     </form>
+                </div>
+            </div>
 
-                    {/* Back to Game */}
-                    <Link
-                        to="/game"
-                        className="block mt-4 text-center text-blue-600 hover:underline"
+            {/* Bottom Navigation Bar */}
+            <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0c14]/95 backdrop-blur-xl border-t border-[#252233] px-4 py-2">
+                <div className="max-w-md mx-auto flex items-center justify-around">
+                    <button
+                        onClick={() => navigate('/game')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
                     >
-                        Back to Game
-                    </Link>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            🎮
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Games</span>
+                    </button>
 
+                    <button
+                        onClick={() => navigate('/recharge')}
+                        className="flex flex-col items-center py-1 px-3 text-amber-400 relative"
+                    >
+                        <span className="absolute -top-2 w-10 h-0.5 bg-amber-400 rounded-full shadow-[0_0_8px_#f59e0b]"></span>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 text-lg">
+                            💳
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Deposit</span>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/withdraw')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
+                    >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            🏦
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Withdraw</span>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/profile')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
+                    >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            👤
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">VIP Profile</span>
+                    </button>
                 </div>
             </div>
         </div>

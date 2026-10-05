@@ -121,10 +121,6 @@ export default function Game() {
             setRoundId(data.roundId);
             setLastResults(data.lastResults || []);
 
-            // Decide next fetch delay:
-            // If the timer is very low (<= 3 seconds) OR if a new round just started but we haven't got the result yet,
-            // poll every 1 second so the user gets the result instantly.
-            // Otherwise, poll every 5 seconds to save server resources.
             const isWaitingForResult = latestResult === null || latestResult.roundId < (data.roundId - 1);
 
             if (data.timeLeft <= 3 || isWaitingForResult) {
@@ -154,7 +150,6 @@ export default function Game() {
                 setAmount('');
                 setBetType('');
                 setBetValue(null);
-                // Clear success after 3s
                 setTimeout(() => setSuccess(''), 3000);
             }
         } catch (err) {
@@ -170,7 +165,6 @@ export default function Game() {
         setUserRoundBets([]);
     };
 
-    // Calculate total profit/loss from user's bets
     const calculateProfitLoss = () => {
         let totalBetAmount = 0;
         let totalPayout = 0;
@@ -199,78 +193,87 @@ export default function Game() {
         }
     };
 
-    // Timer color changes based on urgency
-    const timerColor = timeLeft <= 10 ? '#ef4444' : timeLeft <= 20 ? '#f59e0b' : '#ffffff';
+    const isLocked = timeLeft <= 15;
+    // Circular timer calculations (r=38, circ=238.76)
+    const strokeDashoffset = 238.76 - (238.76 * (timeLeft / 60));
+    const timerStrokeColor = timeLeft <= 15 ? '#ef4444' : timeLeft <= 25 ? '#f59e0b' : '#eab308';
 
     if (!user) return (
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="min-h-screen bg-[#08080c] flex items-center justify-center">
             <div className="text-center">
-                <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-white text-lg">Loading...</p>
+                <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-amber-300 font-serif-gold tracking-widest text-lg">LOADING VNCLUB...</p>
             </div>
         </div>
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
+        <div className="min-h-screen bg-[#08080c] text-gray-200 pb-28 pt-3 px-3 sm:px-6">
             {/* Result Popup */}
             {showResultPopup && lastRoundResult && (() => {
                 const { totalBetAmount, totalPayout, profitLoss, hasWon } = calculateProfitLoss();
                 const hasBets = userRoundBets.length > 0;
 
                 return (
-                    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" onClick={closePopup}>
-                        <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-3xl font-bold text-center mb-6 text-gray-800">Round Result</h2>
+                    <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4" onClick={closePopup}>
+                        <div className="bg-[#12111a] border border-amber-500/30 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl shadow-black relative" onClick={(e) => e.stopPropagation()}>
+                            <div className="text-center mb-6">
+                                <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 mb-2">
+                                    ROUND #{lastRoundResult.roundId}
+                                </span>
+                                <h2 className="text-2xl font-bold font-serif-gold text-amber-300 tracking-wider">ROUND RESULT</h2>
+                            </div>
 
                             <div className="text-center mb-6">
-                                <div className="text-6xl font-bold mb-4" style={{ color: lastRoundResult.color === 'green' ? '#10b981' : lastRoundResult.color === 'red' ? '#ef4444' : '#8b5cf6' }}>
+                                <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center text-5xl font-black font-num shadow-2xl mb-4 border-2 border-white/20"
+                                     style={{
+                                         backgroundColor: lastRoundResult.color === 'green' ? '#059669' : lastRoundResult.color === 'red' ? '#dc2626' : '#7c3aed',
+                                         boxShadow: `0 0 35px ${lastRoundResult.color === 'green' ? 'rgba(16,185,129,0.5)' : lastRoundResult.color === 'red' ? 'rgba(239,68,68,0.5)' : 'rgba(124,58,237,0.5)'}`
+                                     }}>
                                     {lastRoundResult.result}
                                 </div>
-                                <div className="flex justify-center gap-4 mb-4">
-                                    <span className="px-4 py-2 rounded-full text-white font-semibold" style={{ backgroundColor: lastRoundResult.color === 'green' ? '#10b981' : lastRoundResult.color === 'red' ? '#ef4444' : '#8b5cf6' }}>
-                                        {lastRoundResult.color.toUpperCase()}
+                                <div className="flex justify-center gap-3">
+                                    <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase text-white shadow"
+                                          style={{ backgroundColor: lastRoundResult.color === 'green' ? '#059669' : lastRoundResult.color === 'red' ? '#dc2626' : '#7c3aed' }}>
+                                        {lastRoundResult.color}
                                     </span>
-                                    <span className="px-4 py-2 rounded-full bg-gray-700 text-white font-semibold">
-                                        {lastRoundResult.size.toUpperCase()}
+                                    <span className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider uppercase bg-[#201d2d] text-amber-300 border border-amber-500/30">
+                                        {lastRoundResult.size}
                                     </span>
                                 </div>
-                                <p className="text-gray-600 mb-4">Round #{lastRoundResult.roundId}</p>
                             </div>
 
                             {/* Win/Loss Information */}
                             {hasBets && (
-                                <div className="mb-6">
-                                    <div className={`p-4 rounded-lg mb-4 ${hasWon ? 'bg-green-50 border-2 border-green-500' : 'bg-red-50 border-2 border-red-500'}`}>
-                                        <div className="text-center">
-                                            <p className={`text-2xl font-bold mb-2 ${hasWon ? 'text-green-600' : 'text-red-600'}`}>
-                                                {hasWon ? '🎉 You Won!' : '😔 You Lost'}
-                                            </p>
-                                            <p className={`text-3xl font-bold ${hasWon ? 'text-green-700' : 'text-red-700'}`}>
-                                                {profitLoss >= 0 ? '+' : ''}₹{profitLoss.toFixed(2)}
-                                            </p>
-                                        </div>
+                                <div className="mb-6 space-y-3">
+                                    <div className={`p-4 rounded-xl text-center border ${hasWon ? 'bg-emerald-950/40 border-emerald-500/50' : 'bg-red-950/40 border-red-500/50'}`}>
+                                        <p className={`text-xl font-bold font-serif-gold mb-1 ${hasWon ? 'text-emerald-400' : 'text-red-400'}`}>
+                                            {hasWon ? '🎉 YOU WON!' : '😔 YOU LOST'}
+                                        </p>
+                                        <p className={`text-3xl font-bold font-num ${hasWon ? 'text-emerald-300' : 'text-red-300'}`}>
+                                            {profitLoss >= 0 ? '+' : ''}₹{profitLoss.toFixed(2)}
+                                        </p>
                                     </div>
 
-                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                        <div className="flex justify-between mb-2">
-                                            <span className="text-gray-600">Total Bet:</span>
-                                            <span className="font-semibold">₹{totalBetAmount.toFixed(2)}</span>
+                                    <div className="bg-[#171622] border border-white/5 p-4 rounded-xl text-sm">
+                                        <div className="flex justify-between mb-1.5">
+                                            <span className="text-gray-400">Total Bet:</span>
+                                            <span className="font-semibold text-gray-200">₹{totalBetAmount.toFixed(2)}</span>
                                         </div>
                                         {hasWon && (
-                                            <div className="flex justify-between mb-2">
-                                                <span className="text-gray-600">Total Payout:</span>
-                                                <span className="font-semibold text-green-600">₹{totalPayout.toFixed(2)}</span>
+                                            <div className="flex justify-between mb-1.5">
+                                                <span className="text-gray-400">Total Payout:</span>
+                                                <span className="font-semibold text-emerald-400 font-num">₹{totalPayout.toFixed(2)}</span>
                                             </div>
                                         )}
-                                        <div className="border-t pt-2 mt-2">
-                                            <p className="text-sm text-gray-500 mb-2">Your Bets:</p>
+                                        <div className="border-t border-white/10 pt-2.5 mt-2 space-y-1.5">
+                                            <p className="text-xs text-amber-400 font-semibold tracking-wider">YOUR BETS:</p>
                                             {userRoundBets.map((bet, idx) => (
-                                                <div key={idx} className="flex justify-between text-sm mb-1">
-                                                    <span className={bet.won ? 'text-green-600 font-semibold' : 'text-gray-600'}>
+                                                <div key={idx} className="flex justify-between text-xs">
+                                                    <span className={bet.won ? 'text-emerald-400 font-medium' : 'text-gray-400'}>
                                                         {bet.betType === 'number' ? `Number ${bet.betValue}` : bet.betType.toUpperCase()}
                                                     </span>
-                                                    <span className={bet.won ? 'text-green-600 font-semibold' : 'text-gray-600'}>
+                                                    <span className={bet.won ? 'text-emerald-400 font-semibold font-num' : 'text-gray-400 font-num'}>
                                                         ₹{bet.amount.toFixed(2)} {bet.won ? `→ ₹${bet.payout.toFixed(2)}` : ''}
                                                     </span>
                                                 </div>
@@ -281,35 +284,35 @@ export default function Game() {
                             )}
 
                             {!hasBets && (
-                                <div className="mb-6 p-4 bg-gray-50 rounded-lg text-center">
-                                    <p className="text-gray-600">You didn't place any bets this round</p>
+                                <div className="mb-6 p-4 bg-[#171622] border border-white/5 rounded-xl text-center">
+                                    <p className="text-gray-400 text-sm">You didn't place any bets this round</p>
                                 </div>
                             )}
 
                             <button
                                 onClick={closePopup}
-                                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:from-purple-700 hover:to-blue-700 transition"
+                                className="w-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 text-black py-3 rounded-xl font-bold tracking-wider hover:brightness-110 active:scale-98 transition shadow-lg shadow-amber-500/20"
                             >
-                                Close
+                                CLOSE
                             </button>
                         </div>
                     </div>
                 );
             })()}
 
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-4xl mx-auto space-y-4">
                 {/* Notifications */}
                 {notifications.length > 0 && (
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-2">
                         {notifications.map((notification) => (
-                            <div key={notification._id} className="bg-yellow-500 bg-opacity-90 backdrop-blur-lg rounded-lg p-4 shadow-xl flex items-start justify-between">
-                                <div className="flex items-start gap-3 flex-1">
-                                    <span className="text-2xl">📢</span>
-                                    <p className="text-white font-medium">{notification.message}</p>
+                            <div key={notification._id} className="bg-[#1f1b2e] border border-amber-500/40 rounded-xl p-3 shadow-lg flex items-center justify-between">
+                                <div className="flex items-center gap-3 flex-1 text-sm">
+                                    <span className="text-xl">📢</span>
+                                    <p className="text-amber-200">{notification.message}</p>
                                 </div>
                                 <button
                                     onClick={() => handleDismissNotification(notification._id)}
-                                    className="text-white hover:text-gray-200 font-bold text-xl ml-4"
+                                    className="text-gray-400 hover:text-white font-bold text-lg ml-3 px-2"
                                 >
                                     ×
                                 </button>
@@ -318,125 +321,309 @@ export default function Game() {
                     </div>
                 )}
 
-                {/* VNCLUB Branded Header */}
-                <div className="text-center mb-5">
-                    <h1 className="text-4xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-pink-400 to-purple-400 drop-shadow-lg" style={{ letterSpacing: '0.25em', textShadow: '0 0 30px rgba(236,72,153,0.4)' }}>
-                        VNCLUB
-                    </h1>
-                    <div className="h-0.5 w-32 mx-auto mt-1 rounded-full bg-gradient-to-r from-yellow-400 via-pink-400 to-purple-400 opacity-70"></div>
-                </div>
-
-                {/* Navigation */}
-                <div className="grid grid-cols-4 gap-3 mb-6">
-                    <button onClick={() => navigate('/game')} className="bg-white bg-opacity-20 backdrop-blur-lg text-white py-3 rounded-lg font-semibold hover:bg-opacity-30 transition">Game</button>
-                    <button onClick={() => navigate('/recharge')} className="bg-white bg-opacity-20 backdrop-blur-lg text-white py-3 rounded-lg font-semibold hover:bg-opacity-30 transition">Recharge</button>
-                    <button onClick={() => navigate('/withdraw')} className="bg-white bg-opacity-20 backdrop-blur-lg text-white py-3 rounded-lg font-semibold hover:bg-opacity-30 transition">Withdraw</button>
-                    <button onClick={() => navigate('/profile')} className="bg-white bg-opacity-20 backdrop-blur-lg text-white py-3 rounded-lg font-semibold hover:bg-opacity-30 transition">Profile</button>
-                </div>
-
-                {/* Header */}
-                <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-6 mb-6 shadow-xl">
-                    <div className="flex justify-between items-center">
+                {/* Top Bar Header (Matches reference image) */}
+                <div className="flex items-center justify-between py-1">
+                    {/* Brand Left */}
+                    <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/game')}>
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-amber-500 to-yellow-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-black font-serif-gold font-black text-xl">
+                            ⚜
+                        </div>
                         <div>
-                            <h1 className="text-3xl font-bold text-white mb-2">Color Prediction Game</h1>
-                            <p className="text-gray-300">Round #{roundId}</p>
+                            <h1 className="text-xl font-black font-serif-gold text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500 tracking-wider">
+                                VNCLUB
+                            </h1>
+                            <p className="text-[10px] uppercase tracking-widest text-amber-500/80 font-semibold -mt-1">
+                                WIN GO 1 MIN
+                            </p>
                         </div>
-                        <div className="text-right">
-                            <p className="text-gray-300 text-sm">Balance</p>
-                            <p className="text-3xl font-bold text-yellow-400">₹{user.balance.toFixed(2)}</p>
+                    </div>
+
+                    {/* Balance Right */}
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-[#14131d] border border-amber-500/30 px-3 py-1.5 rounded-full shadow-inner">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-r from-amber-400 to-yellow-600 flex items-center justify-center text-black font-bold text-xs shadow">
+                                ₹
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[9px] uppercase tracking-wider text-gray-400 leading-none">BALANCE</p>
+                                <p className="text-sm font-bold font-num text-amber-300 leading-tight">
+                                    ₹{user.balance.toFixed(2)}
+                                </p>
+                            </div>
                         </div>
+                        <button
+                            onClick={() => navigate('/recharge')}
+                            className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center text-black font-bold text-lg shadow-md hover:brightness-110 active:scale-95 transition"
+                            title="Deposit"
+                        >
+                            +
+                        </button>
                     </div>
                 </div>
 
-                {/* Timer */}
-                <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-8 mb-6 shadow-xl text-center">
-                    <p className="text-gray-300 mb-2">Time Remaining</p>
-                    <p className="text-6xl font-bold transition-colors duration-300" style={{ color: timerColor }}>
-                        {timeLeft}s
-                    </p>
-                    {/* Progress bar */}
-                    <div className="mt-4 h-2 bg-white bg-opacity-20 rounded-full overflow-hidden">
-                        <div
-                            className="h-full rounded-full transition-all duration-1000"
-                            style={{
-                                width: `${(timeLeft / 60) * 100}%`,
-                                backgroundColor: timerColor,
-                            }}
-                        />
+                {/* Game Round / Countdown Card (Matches Reference Image) */}
+                <div className="bg-[#12111a] border border-[#2a2538] rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+                    {/* Background glow effect */}
+                    <div className="absolute -top-12 -left-12 w-48 h-48 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                    <div className="flex items-center justify-between gap-4">
+                        {/* Left Details */}
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-3 py-0.5 rounded-full text-[11px] font-semibold tracking-wider uppercase border border-amber-500/40 text-amber-400 bg-amber-500/5">
+                                    CLASSIC 60S
+                                </span>
+                                <span className={`px-3 py-0.5 rounded-full text-[11px] font-semibold tracking-wider uppercase border flex items-center gap-1.5 ${
+                                    isLocked 
+                                        ? 'border-red-500/40 text-red-400 bg-red-500/10' 
+                                        : 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10'
+                                }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-red-500 animate-pulse' : 'bg-emerald-400'}`}></span>
+                                    {isLocked ? 'BETTING LOCKED' : 'BETTING OPEN'}
+                                </span>
+                            </div>
+
+                            <div>
+                                <h2 className="text-2xl sm:text-3xl font-extrabold font-serif-gold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-500">
+                                    WIN GO 1 MINUTE
+                                </h2>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                    Round Period: <span className="font-num text-amber-400 font-bold">#{roundId}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Right Circular Countdown Timer Widget */}
+                        <div className="relative w-24 h-24 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    className="stroke-[#1f1d2b]"
+                                    strokeWidth="6"
+                                    fill="transparent"
+                                />
+                                <circle
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    stroke={timerStrokeColor}
+                                    strokeWidth="6"
+                                    strokeDasharray="238.76"
+                                    strokeDashoffset={strokeDashoffset}
+                                    strokeLinecap="round"
+                                    fill="transparent"
+                                    className="transition-all duration-1000 ease-linear"
+                                />
+                            </svg>
+                            <div className="absolute flex flex-col items-center justify-center">
+                                <span className="text-2xl font-black font-num tracking-tight transition-colors duration-300"
+                                      style={{ color: timerStrokeColor }}>
+                                    {timeLeft}
+                                </span>
+                                <span className="text-[9px] uppercase tracking-wider text-gray-400 -mt-1 font-semibold">
+                                    SECONDS
+                                </span>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Locked Banner Notification */}
+                    {isLocked && (
+                        <div className="mt-4 py-2 px-3 rounded-lg bg-red-950/40 border border-red-900/60 text-center text-xs text-red-300 font-medium flex items-center justify-center gap-1.5">
+                            <span>🔒</span>
+                            <span>Betting is closed for this round. Calculating winning number...</span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Betting Area */}
-                <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-6 mb-6 shadow-xl">
-                    <h2 className="text-2xl font-bold text-white mb-4">Place Your Bet</h2>
-
-                    {error && <div className="bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded mb-4">{error}</div>}
-                    {success && <div className="bg-green-500 bg-opacity-20 border border-green-500 text-green-200 px-4 py-3 rounded mb-4">{success}</div>}
-
-                    <form onSubmit={handleBet} className="space-y-4">
-                        {/* Color Bets */}
-                        <div>
-                            <p className="text-white mb-2 font-semibold">Select Color (2x)</p>
-                            <div className="grid grid-cols-3 gap-3">
-                                <button type="button" onClick={() => { setBetType('green'); setBetValue(null); }} className={`py-4 rounded-lg font-bold text-white transition ${betType === 'green' ? 'bg-green-600 ring-4 ring-green-400' : 'bg-green-500 hover:bg-green-600'}`}>
-                                    GREEN
-                                </button>
-                                <button type="button" onClick={() => { setBetType('violet'); setBetValue(null); }} className={`py-4 rounded-lg font-bold text-white transition ${betType === 'violet' ? 'bg-purple-600 ring-4 ring-purple-400' : 'bg-purple-500 hover:bg-purple-600'}`}>
-                                    VIOLET
-                                </button>
-                                <button type="button" onClick={() => { setBetType('red'); setBetValue(null); }} className={`py-4 rounded-lg font-bold text-white transition ${betType === 'red' ? 'bg-red-600 ring-4 ring-red-400' : 'bg-red-500 hover:bg-red-600'}`}>
-                                    RED
-                                </button>
-                            </div>
+                {/* SELECT YOUR PREDICTION SECTION (Matches Reference Image) */}
+                <div className="bg-[#12111a] border border-[#2a2538] rounded-2xl p-5 shadow-2xl space-y-5">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                        <div className="flex items-center gap-2">
+                            <span className="text-amber-400 text-lg">⚜</span>
+                            <h3 className="text-base sm:text-lg font-bold font-serif-gold text-amber-300 tracking-wider">
+                                SELECT YOUR PREDICTION
+                            </h3>
                         </div>
-
-                        {/* Size Bets */}
-                        <div>
-                            <p className="text-white mb-2 font-semibold">Select Size (2x)</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <button type="button" onClick={() => { setBetType('small'); setBetValue(null); }} className={`py-4 rounded-lg font-bold text-white transition ${betType === 'small' ? 'bg-blue-600 ring-4 ring-blue-400' : 'bg-blue-500 hover:bg-blue-600'}`}>
-                                    SMALL
-                                </button>
-                                <button type="button" onClick={() => { setBetType('big'); setBetValue(null); }} className={`py-4 rounded-lg font-bold text-white transition ${betType === 'big' ? 'bg-orange-600 ring-4 ring-orange-400' : 'bg-orange-500 hover:bg-orange-600'}`}>
-                                    BIG
-                                </button>
-                            </div>
+                        <div className="text-xs text-gray-400">
+                            Balance: <span className="text-amber-400 font-bold font-num">₹{user.balance.toFixed(2)}</span>
                         </div>
+                    </div>
 
-                        {/* Number Bets */}
-                        <div>
-                            <p className="text-white mb-2 font-semibold">Select Number (8x)</p>
-                            <div className="grid grid-cols-5 gap-2">
-                                {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => {
-                                    let btnColor = 'bg-purple-500 hover:bg-purple-600';
-                                    let ringColor = 'ring-purple-400';
-                                    let activeColor = 'bg-purple-600';
-                                    if ([1, 3, 7, 9].includes(num)) {
-                                        btnColor = 'bg-green-500 hover:bg-green-600';
-                                        ringColor = 'ring-green-400';
-                                        activeColor = 'bg-green-600';
-                                    } else if ([2, 4, 6, 8].includes(num)) {
-                                        btnColor = 'bg-red-500 hover:bg-red-600';
-                                        ringColor = 'ring-red-400';
-                                        activeColor = 'bg-red-600';
-                                    }
-                                    const isActive = betType === 'number' && betValue === num;
-                                    return (
-                                        <button key={num} type="button" onClick={() => { setBetType('number'); setBetValue(num); }} className={`py-3 rounded-lg font-bold text-white transition ${isActive ? `${activeColor} ring-4 ${ringColor}` : btnColor}`}>
+                    {/* Messages */}
+                    {error && (
+                        <div className="bg-red-950/60 border border-red-600/50 text-red-300 px-4 py-2.5 rounded-xl text-sm">
+                            {error}
+                        </div>
+                    )}
+                    {success && (
+                        <div className="bg-emerald-950/60 border border-emerald-600/50 text-emerald-300 px-4 py-2.5 rounded-xl text-sm">
+                            {success}
+                        </div>
+                    )}
+
+                    {/* 1. ROYAL COLORS */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-gray-300 tracking-wider uppercase">ROYAL COLORS</span>
+                            <span className="text-amber-400/80 font-medium">Green 2x • Violet 4.5x • Red 2x</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+                            {/* EMERALD */}
+                            <button
+                                type="button"
+                                onClick={() => { setBetType('green'); setBetValue(null); }}
+                                className={`py-4 px-2 rounded-xl text-center transition-all duration-200 border ${
+                                    betType === 'green'
+                                        ? 'bg-gradient-to-b from-[#059669] to-[#047857] border-emerald-300 ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/30 scale-[1.02]'
+                                        : 'bg-gradient-to-b from-[#065f46] to-[#044e39] border-emerald-600/40 hover:brightness-110 active:scale-98'
+                                }`}
+                            >
+                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">EMERALD</p>
+                                <p className="text-[10px] text-emerald-200 font-semibold tracking-wider mt-0.5">2X PAYOUT</p>
+                            </button>
+
+                            {/* VIOLET */}
+                            <button
+                                type="button"
+                                onClick={() => { setBetType('violet'); setBetValue(null); }}
+                                className={`py-4 px-2 rounded-xl text-center transition-all duration-200 border ${
+                                    betType === 'violet'
+                                        ? 'bg-gradient-to-b from-[#7c3aed] to-[#5b21b6] border-purple-300 ring-2 ring-purple-400 shadow-lg shadow-purple-500/30 scale-[1.02]'
+                                        : 'bg-gradient-to-b from-[#581c87] to-[#3b0764] border-purple-600/40 hover:brightness-110 active:scale-98'
+                                }`}
+                            >
+                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">VIOLET</p>
+                                <p className="text-[10px] text-purple-200 font-semibold tracking-wider mt-0.5">4.5X PAYOUT</p>
+                            </button>
+
+                            {/* CRIMSON */}
+                            <button
+                                type="button"
+                                onClick={() => { setBetType('red'); setBetValue(null); }}
+                                className={`py-4 px-2 rounded-xl text-center transition-all duration-200 border ${
+                                    betType === 'red'
+                                        ? 'bg-gradient-to-b from-[#dc2626] to-[#991b1b] border-red-300 ring-2 ring-red-400 shadow-lg shadow-red-500/30 scale-[1.02]'
+                                        : 'bg-gradient-to-b from-[#881337] to-[#4c0519] border-red-600/40 hover:brightness-110 active:scale-98'
+                                }`}
+                            >
+                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">CRIMSON</p>
+                                <p className="text-[10px] text-red-200 font-semibold tracking-wider mt-0.5">2X PAYOUT</p>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 2. DIRECT NUMBER */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-gray-300 tracking-wider uppercase">DIRECT NUMBER</span>
+                            <span className="text-amber-400/80 font-medium">8X JACKPOT</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-2">
+                            {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
+                                const isSelected = betType === 'number' && betValue === num;
+                                return (
+                                    <button
+                                        key={num}
+                                        type="button"
+                                        onClick={() => { setBetType('number'); setBetValue(num); }}
+                                        className={`py-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                                            isSelected
+                                                ? 'bg-[#221f33] border-amber-400 ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/20 scale-[1.03]'
+                                                : 'bg-[#151420] border-[#292639] hover:border-amber-400/50 hover:bg-[#1a1828] active:scale-95'
+                                        }`}
+                                    >
+                                        <span className="text-lg font-black font-num text-white leading-tight">
                                             {num}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                        </span>
+                                        {/* Colored indicator dot */}
+                                        <div className="flex items-center gap-1 mt-1">
+                                            {num === 0 && (
+                                                <>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                                </>
+                                            )}
+                                            {num === 5 && (
+                                                <>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                </>
+                                            )}
+                                            {[1, 3, 7, 9].includes(num) && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                            )}
+                                            {[2, 4, 6, 8].includes(num) && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
+                    </div>
 
-                        {/* Quick Amount Presets */}
+                    {/* 3. SIZE DIVISION */}
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-gray-300 tracking-wider uppercase">SIZE DIVISION</span>
+                            <span className="text-amber-400/80 font-medium">2X Payout (Big 6-9 • Small 0-4)</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => { setBetType('small'); setBetValue(null); }}
+                                className={`py-3.5 rounded-xl font-bold tracking-wider text-sm transition-all border ${
+                                    betType === 'small'
+                                        ? 'bg-gradient-to-r from-blue-900/80 to-indigo-900/80 border-blue-400 ring-2 ring-blue-400/50 text-blue-200 shadow-lg shadow-blue-500/20'
+                                        : 'bg-[#151420] border-[#292639] text-gray-300 hover:border-blue-500/40 hover:text-white'
+                                }`}
+                            >
+                                SMALL (0-4)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setBetType('big'); setBetValue(null); }}
+                                className={`py-3.5 rounded-xl font-bold tracking-wider text-sm transition-all border ${
+                                    betType === 'big'
+                                        ? 'bg-gradient-to-r from-amber-950/80 to-yellow-950/80 border-amber-400 ring-2 ring-amber-400/50 text-amber-300 shadow-lg shadow-amber-500/20'
+                                        : 'bg-[#151420] border-[#292639] text-gray-300 hover:border-amber-500/40 hover:text-white'
+                                }`}
+                            >
+                                BIG (6-9)
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Quick Amount & Bet Form */}
+                    <form onSubmit={handleBet} className="pt-3 border-t border-white/5 space-y-4">
                         <div>
-                            <p className="text-white mb-2 font-semibold">Quick Amount</p>
-                            <div className="grid grid-cols-4 gap-2 mb-2">
-                                {[10, 50, 100, 500].map(preset => (
-                                    <button key={preset} type="button" onClick={() => setAmount(String(preset))}
-                                        className={`py-2 rounded-lg font-semibold text-sm transition ${amount === String(preset) ? 'bg-white text-purple-900' : 'bg-white bg-opacity-20 text-white hover:bg-opacity-30'}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs font-semibold text-gray-300 tracking-wider uppercase">
+                                    QUICK AMOUNT
+                                </label>
+                                {betType && (
+                                    <span className="text-xs text-amber-400 font-semibold uppercase">
+                                        Selected: {betType === 'number' ? `Number ${betValue}` : betType}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                                {[10, 50, 100, 500, 1000].map((preset) => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => setAmount(String(preset))}
+                                        className={`py-2 rounded-lg font-num text-xs font-bold transition border ${
+                                            amount === String(preset)
+                                                ? 'bg-amber-400 text-black border-amber-300 shadow-md'
+                                                : 'bg-[#181624] text-amber-300/90 border-[#2f2b3f] hover:border-amber-500/50'
+                                        }`}
+                                    >
                                         ₹{preset}
                                     </button>
                                 ))}
@@ -445,37 +632,108 @@ export default function Game() {
 
                         {/* Amount Input */}
                         <div>
-                            <label className="block text-white mb-2 font-semibold">Bet Amount</label>
-                            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount" required min="1" max={user.balance} className="w-full px-4 py-3 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-400 border border-white border-opacity-30 focus:outline-none focus:ring-2 focus:ring-white" />
+                            <label className="block text-xs font-semibold text-gray-300 tracking-wider uppercase mb-1.5">
+                                BET AMOUNT (₹)
+                            </label>
+                            <input
+                                type="number"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                placeholder="Enter custom amount"
+                                required
+                                min="1"
+                                max={user.balance}
+                                className="w-full px-4 py-3 rounded-xl bg-[#161422] border border-[#302c40] text-white placeholder-gray-500 focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 font-num font-semibold text-base transition"
+                            />
                         </div>
 
-                        {timeLeft <= 15 && (
-                            <div className="bg-red-500 bg-opacity-20 border border-red-500 text-red-200 px-4 py-3 rounded animate-pulse">
-                                ⏰ Betting closed — Less than 15 seconds remaining
-                            </div>
-                        )}
-
-                        <button type="submit" disabled={loading || !betType || timeLeft <= 15} className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-4 rounded-lg font-bold text-lg hover:from-green-600 hover:to-blue-600 disabled:opacity-50 transition shadow-lg">
-                            {loading ? 'Placing Bet...' : timeLeft <= 15 ? 'Betting Closed' : 'Place Bet'}
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            disabled={loading || !betType || isLocked}
+                            className="w-full py-4 rounded-xl font-extrabold tracking-widest uppercase text-black bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 shadow-xl shadow-amber-500/20 hover:brightness-110 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed disabled:grayscale transition duration-150"
+                        >
+                            {loading ? 'PLACING BET...' : isLocked ? 'BETTING CLOSED' : 'PLACE BET'}
                         </button>
                     </form>
                 </div>
 
-                {/* Last Results */}
-                <div className="bg-white bg-opacity-10 backdrop-blur-lg rounded-2xl p-6 shadow-xl">
-                    <h2 className="text-2xl font-bold text-white mb-4">Last 20 Results</h2>
-                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                {/* Last Results Section */}
+                <div className="bg-[#12111a] border border-[#2a2538] rounded-2xl p-5 shadow-2xl space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                        <h3 className="text-sm font-bold font-serif-gold text-amber-300 tracking-wider uppercase">
+                            LAST 20 RESULTS
+                        </h3>
+                        <span className="text-xs text-gray-500">Live Sync</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-2.5 pt-1">
                         {lastResults.map((r, i) => (
-                            <div key={i} className="text-center">
-                                <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white mx-auto mb-1 shadow-lg" style={{ backgroundColor: r.color === 'green' ? '#10b981' : r.color === 'red' ? '#ef4444' : '#8b5cf6' }}>
+                            <div key={i} className="text-center group">
+                                <div
+                                    className="w-11 h-11 rounded-full flex items-center justify-center font-black font-num text-white text-base mx-auto mb-1 shadow-lg transition-transform group-hover:scale-110 border border-white/20"
+                                    style={{
+                                        backgroundColor: r.color === 'green' ? '#059669' : r.color === 'red' ? '#dc2626' : '#7c3aed',
+                                        boxShadow: `0 0 12px ${r.color === 'green' ? 'rgba(5,150,105,0.4)' : r.color === 'red' ? 'rgba(220,38,38,0.4)' : 'rgba(124,58,237,0.4)'}`
+                                    }}
+                                >
                                     {r.result}
                                 </div>
-                                <p className="text-xs text-gray-400">#{r.roundId % 1000}</p>
+                                <p className="text-[10px] text-gray-500 font-num">#{r.roundId % 1000}</p>
                             </div>
                         ))}
                     </div>
                 </div>
+            </div>
 
+            {/* Bottom Navigation Bar (Matches Reference Image) */}
+            <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#0d0c14]/95 backdrop-blur-xl border-t border-[#252233] px-4 py-2">
+                <div className="max-w-md mx-auto flex items-center justify-around">
+                    {/* Games Tab */}
+                    <button
+                        onClick={() => navigate('/game')}
+                        className="flex flex-col items-center py-1 px-3 text-amber-400 relative"
+                    >
+                        <span className="absolute -top-2 w-10 h-0.5 bg-amber-400 rounded-full shadow-[0_0_8px_#f59e0b]"></span>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 text-lg">
+                            🎮
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Games</span>
+                    </button>
+
+                    {/* Deposit Tab */}
+                    <button
+                        onClick={() => navigate('/recharge')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
+                    >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            💳
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Deposit</span>
+                    </button>
+
+                    {/* Withdraw Tab */}
+                    <button
+                        onClick={() => navigate('/withdraw')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
+                    >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            🏦
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">Withdraw</span>
+                    </button>
+
+                    {/* VIP Profile Tab */}
+                    <button
+                        onClick={() => navigate('/profile')}
+                        className="flex flex-col items-center py-1 px-3 text-gray-400 hover:text-amber-300 transition"
+                    >
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-amber-300 text-lg">
+                            👤
+                        </div>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">VIP Profile</span>
+                    </button>
+                </div>
             </div>
         </div>
     );
