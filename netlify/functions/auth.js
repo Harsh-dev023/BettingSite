@@ -77,7 +77,7 @@ export const handler = async (event) => {
             // Set cookie
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: true,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',
@@ -141,7 +141,7 @@ export const handler = async (event) => {
             // Set cookie
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: true,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',
@@ -214,7 +214,7 @@ export const handler = async (event) => {
         if (event.httpMethod === 'POST' && path === '/logout') {
             const cookieHeader = cookie.serialize('token', '', {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: true,
                 sameSite: 'lax',
                 maxAge: 0,
                 path: '/',

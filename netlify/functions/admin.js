@@ -96,7 +96,7 @@ export const handler = async (event) => {
 
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
+                secure: true,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',
