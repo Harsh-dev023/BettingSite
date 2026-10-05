@@ -74,10 +74,13 @@ export const handler = async (event) => {
                 expiresIn: '7d',
             });
 
+            const host = event.headers.host || '';
+            const isSecure = !host.includes('localhost') && !host.includes('127.0.0.1');
+
             // Set cookie
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: true,
+                secure: isSecure,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',
@@ -138,10 +141,13 @@ export const handler = async (event) => {
                 expiresIn: '7d',
             });
 
+            const host = event.headers.host || '';
+            const isSecure = !host.includes('localhost') && !host.includes('127.0.0.1');
+
             // Set cookie
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: true,
+                secure: isSecure,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',

@@ -64,6 +64,12 @@ export const handler = async (event) => {
                     },
                     {
                         dismissedBy: { $ne: user._id }  // Not dismissed by this user
+                    },
+                    {
+                        $or: [
+                            { expiresAt: null },              // Never expires
+                            { expiresAt: { $gt: new Date() }} // Not expired yet
+                        ]
                     }
                 ]
             }).sort({ createdAt: -1 });

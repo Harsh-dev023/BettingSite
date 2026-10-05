@@ -301,26 +301,6 @@ export default function Game() {
             })()}
 
             <div className="max-w-4xl mx-auto space-y-4">
-                {/* Notifications */}
-                {notifications.length > 0 && (
-                    <div className="space-y-2">
-                        {notifications.map((notification) => (
-                            <div key={notification._id} className="bg-[#1f1b2e] border border-amber-500/40 rounded-xl p-3 shadow-lg flex items-center justify-between">
-                                <div className="flex items-center gap-3 flex-1 text-sm">
-                                    <span className="text-xl">📢</span>
-                                    <p className="text-amber-200">{notification.message}</p>
-                                </div>
-                                <button
-                                    onClick={() => handleDismissNotification(notification._id)}
-                                    className="text-gray-400 hover:text-white font-bold text-lg ml-3 px-2"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
                 {/* Top Bar Header (Matches reference image) */}
                 <div className="flex items-center justify-between py-1">
                     {/* Brand Left */}
@@ -360,6 +340,30 @@ export default function Game() {
                         </button>
                     </div>
                 </div>
+
+                {/* Notification Banner — placed right below VNCLUB header */}
+                {notifications.length > 0 && (
+                    <div className="space-y-2">
+                        {notifications.map((notification) => (
+                            <div
+                                key={notification._id}
+                                className="bg-[#171424] border border-amber-500/40 rounded-xl py-3 px-10 shadow-lg relative flex items-center justify-center text-center overflow-hidden"
+                            >
+                                <div className="w-full flex items-center justify-center gap-2 text-center text-amber-200 text-sm font-medium">
+                                    <span className="text-base flex-shrink-0">📢</span>
+                                    <span className="text-center font-medium tracking-wide break-words">{notification.message}</span>
+                                </div>
+                                <button
+                                    onClick={() => handleDismissNotification(notification._id)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white font-bold text-lg p-1 transition"
+                                    title="Dismiss notification"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Game Round / Countdown Card (Matches Reference Image) */}
                 <div className="bg-[#12111a] border border-[#2a2538] rounded-2xl p-5 shadow-2xl relative overflow-hidden">
@@ -473,7 +477,7 @@ export default function Game() {
                             <span className="text-amber-400/80 font-medium">Green 2x • Violet 4.5x • Red 2x</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-                            {/* EMERALD */}
+                            {/* GREEN */}
                             <button
                                 type="button"
                                 onClick={() => { setBetType('green'); setBetValue(null); }}
@@ -483,7 +487,7 @@ export default function Game() {
                                         : 'bg-gradient-to-b from-[#065f46] to-[#044e39] border-emerald-600/40 hover:brightness-110 active:scale-98'
                                 }`}
                             >
-                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">EMERALD</p>
+                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">GREEN</p>
                                 <p className="text-[10px] text-emerald-200 font-semibold tracking-wider mt-0.5">2X PAYOUT</p>
                             </button>
 
@@ -501,7 +505,7 @@ export default function Game() {
                                 <p className="text-[10px] text-purple-200 font-semibold tracking-wider mt-0.5">4.5X PAYOUT</p>
                             </button>
 
-                            {/* CRIMSON */}
+                            {/* RED */}
                             <button
                                 type="button"
                                 onClick={() => { setBetType('red'); setBetValue(null); }}
@@ -511,7 +515,7 @@ export default function Game() {
                                         : 'bg-gradient-to-b from-[#881337] to-[#4c0519] border-red-600/40 hover:brightness-110 active:scale-98'
                                 }`}
                             >
-                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">CRIMSON</p>
+                                <p className="font-extrabold text-white text-sm sm:text-base tracking-wider">RED</p>
                                 <p className="text-[10px] text-red-200 font-semibold tracking-wider mt-0.5">2X PAYOUT</p>
                             </button>
                         </div>
@@ -526,41 +530,56 @@ export default function Game() {
                         <div className="grid grid-cols-5 gap-2">
                             {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => {
                                 const isSelected = betType === 'number' && betValue === num;
+                                // Color logic: 0,5 = violet combo; 1,3,7,9 = green; 2,4,6,8 = red
+                                let bgDefault, bgSelected, borderSelected, ringColor, shadowColor;
+                                if (num === 0 || num === 5) {
+                                    // Violet/purple with dual color
+                                    bgDefault = 'bg-gradient-to-b from-[#581c87] to-[#3b0764]';
+                                    bgSelected = 'bg-gradient-to-b from-[#7c3aed] to-[#5b21b6]';
+                                    borderSelected = 'border-purple-300';
+                                    ringColor = 'ring-purple-400';
+                                    shadowColor = 'shadow-purple-500/30';
+                                } else if ([1, 3, 7, 9].includes(num)) {
+                                    // Green
+                                    bgDefault = 'bg-gradient-to-b from-[#065f46] to-[#044e39]';
+                                    bgSelected = 'bg-gradient-to-b from-[#059669] to-[#047857]';
+                                    borderSelected = 'border-emerald-300';
+                                    ringColor = 'ring-emerald-400';
+                                    shadowColor = 'shadow-emerald-500/30';
+                                } else {
+                                    // Red (2, 4, 6, 8)
+                                    bgDefault = 'bg-gradient-to-b from-[#881337] to-[#4c0519]';
+                                    bgSelected = 'bg-gradient-to-b from-[#dc2626] to-[#991b1b]';
+                                    borderSelected = 'border-red-300';
+                                    ringColor = 'ring-red-400';
+                                    shadowColor = 'shadow-red-500/30';
+                                }
+
                                 return (
                                     <button
                                         key={num}
                                         type="button"
                                         onClick={() => { setBetType('number'); setBetValue(num); }}
-                                        className={`py-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                                        className={`py-3 rounded-xl border flex flex-col items-center justify-center transition-all duration-200 ${
                                             isSelected
-                                                ? 'bg-[#221f33] border-amber-400 ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/20 scale-[1.03]'
-                                                : 'bg-[#151420] border-[#292639] hover:border-amber-400/50 hover:bg-[#1a1828] active:scale-95'
+                                                ? `${bgSelected} ${borderSelected} ring-2 ${ringColor} ${shadowColor} shadow-lg scale-[1.03]`
+                                                : `${bgDefault} border-white/10 hover:brightness-125 active:scale-95`
                                         }`}
                                     >
                                         <span className="text-lg font-black font-num text-white leading-tight">
                                             {num}
                                         </span>
-                                        {/* Colored indicator dot */}
-                                        <div className="flex items-center gap-1 mt-1">
-                                            {num === 0 && (
-                                                <>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                                </>
-                                            )}
-                                            {num === 5 && (
-                                                <>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                </>
-                                            )}
-                                            {[1, 3, 7, 9].includes(num) && (
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                            )}
-                                            {[2, 4, 6, 8].includes(num) && (
+                                        {/* Small secondary color indicator for dual-color numbers */}
+                                        {num === 0 && (
+                                            <div className="flex items-center gap-1 mt-1">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-red-400"></span>
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
+                                        {num === 5 && (
+                                            <div className="flex items-center gap-1 mt-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                            </div>
+                                        )}
                                     </button>
                                 );
                             })}

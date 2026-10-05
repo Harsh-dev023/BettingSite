@@ -127,6 +127,7 @@ const notificationSchema = new mongoose.Schema({
     targetUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Empty = all users
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     dismissedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Users who dismissed
+    expiresAt: { type: Date, default: null }, // null = never expires
     createdAt: { type: Date, default: Date.now },
 });
 

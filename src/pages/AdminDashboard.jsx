@@ -58,6 +58,13 @@ export default function AdminDashboard() {
     const [bets, setBets] = useState([]);
     const [notificationMessage, setNotificationMessage] = useState('');
     const [targetUserPhone, setTargetUserPhone] = useState('');
+    const [durationMinutes, setDurationMinutes] = useState('');
+    const [notificationsList, setNotificationsList] = useState([]);
+    const [editingNotificationId, setEditingNotificationId] = useState(null);
+    const [editNotificationMessage, setEditNotificationMessage] = useState('');
+    const [editTargetUserPhone, setEditTargetUserPhone] = useState('');
+    const [editDurationMinutes, setEditDurationMinutes] = useState('');
+    const [notificationLoading, setNotificationLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [editingUserId, setEditingUserId] = useState(null);
@@ -85,6 +92,9 @@ export default function AdminDashboard() {
 
             const betsData = await api.getCurrentBets();
             if (!betsData.error) setBets(betsData.bets);
+
+            const notifsData = await api.getAdminNotifications();
+            if (!notifsData.error) setNotificationsList(notifsData.notifications || []);
         } catch (err) {
             console.error('Failed to load data');
         }
@@ -197,19 +207,91 @@ export default function AdminDashboard() {
     };
 
     const handleCreateNotification = async () => {
+        if (!notificationMessage.trim()) {
+            setError('Notification message cannot be empty');
+            return;
+        }
         setError('');
         setMessage('');
+        setNotificationLoading(true);
         try {
-            const data = await api.createNotification(notificationMessage, targetUserPhone);
+            const data = await api.createNotification(notificationMessage, targetUserPhone, durationMinutes || '0');
             if (data.error) {
                 setError(data.error);
             } else {
                 setMessage('Notification sent successfully!');
                 setNotificationMessage('');
                 setTargetUserPhone('');
+                setDurationMinutes('');
+                const notifsData = await api.getAdminNotifications();
+                if (!notifsData.error) setNotificationsList(notifsData.notifications || []);
             }
         } catch (err) {
             setError('Failed to create notification');
+        } finally {
+            setNotificationLoading(false);
+        }
+    };
+
+    const handleStartEditNotification = (notif) => {
+        setEditingNotificationId(notif._id);
+        setEditNotificationMessage(notif.message);
+        setEditTargetUserPhone(notif.targetUsers && notif.targetUsers.length > 0 ? notif.targetUsers[0].phone || '' : '');
+        // Calculate remaining minutes if expiresAt exists
+        if (notif.expiresAt) {
+            const remaining = Math.max(0, Math.round((new Date(notif.expiresAt) - Date.now()) / 60000));
+            setEditDurationMinutes(String(remaining));
+        } else {
+            setEditDurationMinutes('');
+        }
+    };
+
+    const handleCancelEditNotification = () => {
+        setEditingNotificationId(null);
+        setEditNotificationMessage('');
+        setEditTargetUserPhone('');
+        setEditDurationMinutes('');
+    };
+
+    const handleSaveEditNotification = async () => {
+        if (!editNotificationMessage.trim()) {
+            setError('Notification message cannot be empty');
+            return;
+        }
+        setError('');
+        setMessage('');
+        setNotificationLoading(true);
+        try {
+            const data = await api.updateNotification(editingNotificationId, editNotificationMessage, editTargetUserPhone, editDurationMinutes || '0');
+            if (data.error) {
+                setError(data.error);
+            } else {
+                setMessage('Notification updated successfully!');
+                handleCancelEditNotification();
+                const notifsData = await api.getAdminNotifications();
+                if (!notifsData.error) setNotificationsList(notifsData.notifications || []);
+            }
+        } catch (err) {
+            setError('Failed to update notification');
+        } finally {
+            setNotificationLoading(false);
+        }
+    };
+
+    const handleDeleteNotification = async (notificationId) => {
+        if (!window.confirm('Are you sure you want to delete this notification?')) return;
+        setError('');
+        setMessage('');
+        try {
+            const data = await api.deleteNotification(notificationId);
+            if (data.error) {
+                setError(data.error);
+            } else {
+                setMessage('Notification deleted successfully!');
+                setNotificationsList(notificationsList.filter(n => n._id !== notificationId));
+            }
+        } catch (err) {
+            setError('Failed to delete notification');
         }
     };
 
@@ -331,37 +413,216 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Send Notification */}
+                {/* Notification Management */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-bold mb-4">📢 Send Notification</h2>
-                    <div className="space-y-4">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                            <textarea
-                                value={notificationMessage}
-                                onChange={(e) => setNotificationMessage(e.target.value)}
-                                placeholder="Enter notification message..."
-                                rows="3"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
-                            />
+                            <h2 className="text-xl font-bold text-gray-800">📢 Notification Center</h2>
+                            <p className="text-xs text-gray-500">Manage site-wide notices and user-specific announcements</p>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Target User (Optional)</label>
-                            <input
-                                type="text"
-                                value={targetUserPhone}
-                                onChange={(e) => setTargetUserPhone(e.target.value)}
-                                placeholder="Enter phone number or leave empty for all users"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Leave empty to send to all users</p>
+                        <span className="text-xs bg-yellow-100 text-yellow-800 font-semibold px-2.5 py-1 rounded-full">
+                            {notificationsList.length} Active {notificationsList.length === 1 ? 'Notice' : 'Notices'}
+                        </span>
+                    </div>
+
+                    {/* Create or Edit Form */}
+                    <div className="bg-gray-50 p-4 rounded-lg border mb-6">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
+                            {editingNotificationId ? '✏️ Edit Notification' : '➕ Add New Notification'}
+                        </h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                    Message <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                    value={editingNotificationId ? editNotificationMessage : notificationMessage}
+                                    onChange={(e) =>
+                                        editingNotificationId
+                                            ? setEditNotificationMessage(e.target.value)
+                                            : setNotificationMessage(e.target.value)
+                                    }
+                                    placeholder="Enter notification message to display on the game banner..."
+                                    rows="2"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                    Target User Phone (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editingNotificationId ? editTargetUserPhone : targetUserPhone}
+                                    onChange={(e) =>
+                                        editingNotificationId
+                                            ? setEditTargetUserPhone(e.target.value)
+                                            : setTargetUserPhone(e.target.value)
+                                    }
+                                    placeholder="Leave empty for all users, or enter 10-digit phone number"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                                />
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    Empty = All users will see this notification banner
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                    Duration (minutes) — 0 or empty = never expires
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={editingNotificationId ? editDurationMinutes : durationMinutes}
+                                        onChange={(e) =>
+                                            editingNotificationId
+                                                ? setEditDurationMinutes(e.target.value)
+                                                : setDurationMinutes(e.target.value)
+                                        }
+                                        placeholder="0"
+                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                                    />
+                                    {[30, 60, 360, 1440].map((mins) => (
+                                        <button
+                                            key={mins}
+                                            type="button"
+                                            onClick={() =>
+                                                editingNotificationId
+                                                    ? setEditDurationMinutes(String(mins))
+                                                    : setDurationMinutes(String(mins))
+                                            }
+                                            className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 border rounded text-xs font-semibold text-gray-600 transition"
+                                        >
+                                            {mins < 60 ? `${mins}m` : `${mins / 60}h`}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="text-[11px] text-gray-500 mt-1">
+                                    Quick: 30m · 1h · 6h · 24h — Notification auto-disappears after this time
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1">
+                                {editingNotificationId ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveEditNotification}
+                                            disabled={notificationLoading}
+                                            className="bg-green-600 text-white px-5 py-2 rounded-lg font-semibold text-sm hover:bg-green-700 disabled:opacity-50 transition"
+                                        >
+                                            {notificationLoading ? 'Saving...' : 'Save Changes'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleCancelEditNotification}
+                                            className="bg-gray-500 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-600 transition"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleCreateNotification}
+                                        disabled={notificationLoading}
+                                        className="bg-yellow-600 text-white px-6 py-2 rounded-lg font-semibold text-sm hover:bg-yellow-700 disabled:opacity-50 transition"
+                                    >
+                                        {notificationLoading ? 'Publishing...' : 'Publish Notification'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        <button
-                            onClick={handleCreateNotification}
-                            className="bg-yellow-600 text-white px-6 py-2 rounded-lg hover:bg-yellow-700 transition"
-                        >
-                            Send Notification
-                        </button>
+                    </div>
+
+                    {/* Current Notifications List */}
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
+                            📋 Current Notifications
+                        </h3>
+                        {notificationsList.length === 0 ? (
+                            <div className="text-center py-6 border border-dashed rounded-lg text-gray-500 text-sm">
+                                No active notifications. Use the form above to add a new notification banner.
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {notificationsList.map((notif) => {
+                                    const isTargetSpecific = notif.targetUsers && notif.targetUsers.length > 0;
+                                    const targetPhone = isTargetSpecific ? notif.targetUsers[0].phone || 'Specific User' : 'All Users';
+                                    const isEditingThis = editingNotificationId === notif._id;
+
+                                    return (
+                                        <div
+                                            key={notif._id}
+                                            className={`p-4 rounded-lg border transition ${
+                                                isEditingThis
+                                                    ? 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-400'
+                                                    : 'bg-white border-gray-200 hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                        <span
+                                                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                isTargetSpecific
+                                                                    ? 'bg-blue-100 text-blue-700'
+                                                                    : 'bg-green-100 text-green-700'
+                                                            }`}
+                                                        >
+                                                            {isTargetSpecific ? `📱 To: ${targetPhone}` : '🌍 All Users'}
+                                                        </span>
+                                                        {notif.expiresAt && (
+                                                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                                                                new Date(notif.expiresAt) > new Date()
+                                                                    ? 'bg-orange-100 text-orange-700'
+                                                                    : 'bg-gray-100 text-gray-500 line-through'
+                                                            }`}>
+                                                                ⏱ {new Date(notif.expiresAt) > new Date()
+                                                                    ? `Expires ${new Date(notif.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ${new Date(notif.expiresAt).toLocaleDateString()}`
+                                                                    : 'Expired'
+                                                                }
+                                                            </span>
+                                                        )}
+                                                        {!notif.expiresAt && (
+                                                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-700">
+                                                                ∞ No Expiry
+                                                            </span>
+                                                        )}
+                                                        <span className="text-xs text-gray-400">
+                                                            {new Date(notif.createdAt).toLocaleDateString()} {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-gray-800 text-sm font-medium break-words">
+                                                        {notif.message}
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStartEditNotification(notif)}
+                                                        className="px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 rounded-md text-xs font-semibold transition"
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteNotification(notif._id)}
+                                                        className="px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-md text-xs font-semibold transition"
+                                                    >
+                                                        🗑️ Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
 

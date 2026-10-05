@@ -217,12 +217,12 @@ export const api = {
         return res.json();
     },
 
-    createNotification: async (message, targetUserPhone) => {
+    createNotification: async (message, targetUserPhone, durationMinutes) => {
         const res = await fetch(`${API_BASE}/admin/create-notification`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ message, targetUserPhone }),
+            body: JSON.stringify({ message, targetUserPhone, durationMinutes }),
         });
         return res.json();
     },
@@ -230,6 +230,26 @@ export const api = {
     getAdminNotifications: async () => {
         const res = await fetch(`${API_BASE}/admin/notifications`, {
             credentials: 'include',
+        });
+        return res.json();
+    },
+
+    updateNotification: async (notificationId, message, targetUserPhone, durationMinutes) => {
+        const res = await fetch(`${API_BASE}/admin/update-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ notificationId, message, targetUserPhone, durationMinutes }),
+        });
+        return res.json();
+    },
+
+    deleteNotification: async (notificationId) => {
+        const res = await fetch(`${API_BASE}/admin/delete-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ notificationId }),
         });
         return res.json();
     },

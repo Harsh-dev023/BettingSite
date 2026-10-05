@@ -3,6 +3,10 @@
   functions = "netlify/functions"
   publish = "dist"
 
+[dev]
+  port = 8888
+  publish = "dist"
+
 # Scheduled function to auto-generate results every minute
 [functions."scheduled-auto-result"]
   schedule = "* * * * *"

@@ -94,9 +94,12 @@ export const handler = async (event) => {
                 expiresIn: '7d',
             });
 
+            const host = event.headers.host || '';
+            const isSecure = !host.includes('localhost') && !host.includes('127.0.0.1');
+
             const cookieHeader = cookie.serialize('token', token, {
                 httpOnly: true,
-                secure: true,
+                secure: isSecure,
                 sameSite: 'lax',
                 maxAge: 7 * 24 * 60 * 60,
                 path: '/',
@@ -402,7 +405,7 @@ export const handler = async (event) => {
 
         // POST /create-notification - Create notification
         if (event.httpMethod === 'POST' && path === '/create-notification') {
-            const { message, targetUserPhone } = JSON.parse(event.body);
+            const { message, targetUserPhone, durationMinutes } = JSON.parse(event.body);
 
             if (!message) {
                 return {
@@ -416,7 +419,13 @@ export const handler = async (event) => {
                 message,
                 targetUsers: [],
                 createdBy: decoded.userId || null,
+                expiresAt: null,
             };
+
+            // Set expiry if durationMinutes is provided and > 0
+            if (durationMinutes && parseInt(durationMinutes, 10) > 0) {
+                notificationData.expiresAt = new Date(Date.now() + parseInt(durationMinutes, 10) * 60 * 1000);
+            }
 
             // If targetUserPhone is provided, find that user
             if (targetUserPhone && targetUserPhone.trim()) {
@@ -452,6 +461,82 @@ export const handler = async (event) => {
                 statusCode: 200,
                 headers,
                 body: JSON.stringify({ notifications }),
+            };
+        }
+
+        // POST /update-notification - Edit an existing notification
+        if (event.httpMethod === 'POST' && path === '/update-notification') {
+            const { notificationId, message, targetUserPhone, durationMinutes } = JSON.parse(event.body);
+
+            if (!notificationId || !message || !message.trim()) {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ error: 'Notification ID and message are required' }),
+                };
+            }
+
+            const notification = await Notification.findById(notificationId);
+            if (!notification) {
+                return {
+                    statusCode: 404,
+                    headers,
+                    body: JSON.stringify({ error: 'Notification not found' }),
+                };
+            }
+
+            notification.message = message.trim();
+
+            // Update expiry
+            if (durationMinutes && parseInt(durationMinutes, 10) > 0) {
+                notification.expiresAt = new Date(Date.now() + parseInt(durationMinutes, 10) * 60 * 1000);
+            } else {
+                notification.expiresAt = null; // Never expires
+            }
+
+            if (targetUserPhone && targetUserPhone.trim()) {
+                const targetUser = await User.findOne({ phone: targetUserPhone.trim() });
+                if (!targetUser) {
+                    return {
+                        statusCode: 404,
+                        headers,
+                        body: JSON.stringify({ error: 'Target user not found' }),
+                    };
+                }
+                notification.targetUsers = [targetUser._id];
+            } else {
+                notification.targetUsers = [];
+            }
+
+            // Reset dismissedBy so users can see the updated notification
+            notification.dismissedBy = [];
+            await notification.save();
+
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({ success: true, notification }),
+            };
+        }
+
+        // POST /delete-notification - Delete a notification
+        if (event.httpMethod === 'POST' && path === '/delete-notification') {
+            const { notificationId } = JSON.parse(event.body);
+
+            if (!notificationId) {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({ error: 'Notification ID is required' }),
+                };
+            }
+
+            await Notification.findByIdAndDelete(notificationId);
+
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({ success: true }),
             };
         }
 
