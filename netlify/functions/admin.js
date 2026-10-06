@@ -33,19 +33,14 @@ export const handler = async (event) => {
     try {
         // POST /login - Admin login (now checks database)
         if (event.httpMethod === 'POST' && path === '/login') {
-            const body = JSON.parse(event.body);
+            let body;
+            try { body = JSON.parse(event.body || '{}'); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
             const phone = (body.phone || '').trim();
             const password = body.password;
 
-            console.log('Admin login attempt - Phone:', phone);
-            console.log('Phone length:', phone.length);
-            console.log('Phone type:', typeof phone);
-            console.log('Phone chars:', phone.split('').map(c => c.charCodeAt(0)));
-
             // Validate phone
             if (!phone || !/^\d{10}$/.test(phone)) {
-                console.log('Invalid phone format:', phone);
-                console.log('Phone validation failed - regex test:', /^\d{10}$/.test(phone));
                 return {
                     statusCode: 400,
                     headers,
@@ -90,7 +85,7 @@ export const handler = async (event) => {
             console.log('Admin login successful for phone:', phone);
 
             // Generate JWT with admin flag
-            const token = jwt.sign({ phone, isAdmin: true }, JWT_SECRET, {
+            const token = jwt.sign({ userId: user._id, phone, isAdmin: true }, JWT_SECRET, {
                 expiresIn: '7d',
             });
 
@@ -114,15 +109,14 @@ export const handler = async (event) => {
 
         // GET /upi - Get UPI ID (Public endpoint - no auth required)
         if (event.httpMethod === 'GET' && path === '/upi') {
-            const setting = await Setting.findOne({ key: 'upiId' });
-            const qrSetting = await Setting.findOne({ key: 'qrImage' });
+            // Fetch both settings in ONE query instead of two
+            const settings = await Setting.find({ key: { $in: ['upiId', 'qrImage'] } }).lean();
+            const upiId = settings.find(s => s.key === 'upiId')?.value || '';
+            const qrImage = settings.find(s => s.key === 'qrImage')?.value || null;
             return {
                 statusCode: 200,
                 headers,
-                body: JSON.stringify({ 
-                    upiId: setting?.value || '',
-                    qrImage: qrSetting?.value || null
-                }),
+                body: JSON.stringify({ upiId, qrImage }),
             };
         }
 
@@ -149,7 +143,9 @@ export const handler = async (event) => {
 
         // POST /set-result - Set winning number
         if (event.httpMethod === 'POST' && path === '/set-result') {
-            const body = JSON.parse(event.body);
+            let body;
+            try { body = JSON.parse(event.body || '{}'); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
             const result = parseInt(body.result, 10);
 
             // Must be a valid integer between 0-9
@@ -231,7 +227,9 @@ export const handler = async (event) => {
 
         // POST /update-balance - Add/reduce user balance
         if (event.httpMethod === 'POST' && path === '/update-balance') {
-            const { userId, amount } = JSON.parse(event.body);
+            let userId, amount;
+            try { ({ userId, amount } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             const user = await User.findById(userId);
             if (!user) {
@@ -253,12 +251,13 @@ export const handler = async (event) => {
             };
         }
 
-        // GET /recharges - List recharge requests
+        // GET /recharges - List pending recharge requests (pending first, then recent approved/rejected)
         if (event.httpMethod === 'GET' && path === '/recharges') {
             const requests = await RechargeRequest.find()
                 .populate('userId', 'phone')
-                .sort({ createdAt: -1 })
-                .limit(100);
+                .sort({ status: 1, createdAt: -1 }) // pending sorts before approved/rejected alphabetically
+                .limit(100)
+                .lean();
 
             return {
                 statusCode: 200,
@@ -269,7 +268,9 @@ export const handler = async (event) => {
 
         // POST /approve-recharge - Approve/reject recharge
         if (event.httpMethod === 'POST' && path === '/approve-recharge') {
-            const { requestId, approve } = JSON.parse(event.body);
+            let requestId, approve;
+            try { ({ requestId, approve } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             const request = await RechargeRequest.findById(requestId);
             if (!request) {
@@ -312,8 +313,9 @@ export const handler = async (event) => {
         if (event.httpMethod === 'GET' && path === '/withdrawals') {
             const requests = await WithdrawalRequest.find()
                 .populate('userId', 'phone bankDetails')
-                .sort({ createdAt: -1 })
-                .limit(100);
+                .sort({ status: 1, createdAt: -1 }) // pending first
+                .limit(100)
+                .lean();
 
             return {
                 statusCode: 200,
@@ -324,7 +326,9 @@ export const handler = async (event) => {
 
         // POST /approve-withdrawal - Approve/reject withdrawal
         if (event.httpMethod === 'POST' && path === '/approve-withdrawal') {
-            const { requestId, approve } = JSON.parse(event.body);
+            let requestId, approve;
+            try { ({ requestId, approve } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             const request = await WithdrawalRequest.findById(requestId);
             if (!request) {
@@ -361,12 +365,14 @@ export const handler = async (event) => {
             };
         }
 
-        // GET /bets - All bets for current round
+        // GET /bets - All bets for current round (lean + field-select for fast live refresh)
         if (event.httpMethod === 'GET' && path === '/bets') {
             const currentRoundId = Math.floor(Date.now() / 60000);
             const bets = await Bet.find({ roundId: currentRoundId })
-                .populate('userId', 'phone')
-                .sort({ createdAt: -1 });
+                .populate('userId', 'phone')   // only need phone
+                .select('userId betType betValue amount createdAt') // skip won/payout during live round
+                .sort({ createdAt: -1 })
+                .lean();                        // plain JS objects — skips Mongoose overhead
 
             return {
                 statusCode: 200,
@@ -377,7 +383,9 @@ export const handler = async (event) => {
 
         // POST /update-upi - Update UPI ID
         if (event.httpMethod === 'POST' && path === '/update-upi') {
-            const { upiId, qrImage } = JSON.parse(event.body);
+            let upiId, qrImage;
+            try { ({ upiId, qrImage } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             await Setting.findOneAndUpdate(
                 { key: 'upiId' },
@@ -402,7 +410,9 @@ export const handler = async (event) => {
 
         // POST /create-notification - Create notification
         if (event.httpMethod === 'POST' && path === '/create-notification') {
-            const { message, targetUserPhone } = JSON.parse(event.body);
+            let message, targetUserPhone;
+            try { ({ message, targetUserPhone } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             if (!message) {
                 return {

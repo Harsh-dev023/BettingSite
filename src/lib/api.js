@@ -43,14 +43,64 @@ export const api = {
         return res.json();
     },
 
-    placeBet: async (betType, betValue, amount) => {
-        const res = await fetch(`${API_BASE}/game/bet`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ betType, betValue, amount }),
-        });
-        return res.json();
+    placeBet: async (betType, betValue, amount, timeLeft = 60) => {
+        // Smart jitter: spread load when time is plentiful, fire instantly near the cutoff.
+        //
+        //  timeLeft > 25s  → full 400ms jitter (safe, bet won't miss cutoff)
+        //  timeLeft 20–25s → 200ms jitter (cautious)
+        //  timeLeft ≤ 20s  → 0ms jitter   (fire immediately — don't risk missing the 15s cutoff)
+        //
+        // Without this, a player betting at 15.3s remaining + 400ms jitter
+        // = request arrives at 14.9s → server rejects it. Player loses their click.
+        let maxJitter = 0;
+        if (timeLeft > 25) maxJitter = 400;
+        else if (timeLeft > 20) maxJitter = 200;
+        // else 0 — fire immediately
+
+        if (maxJitter > 0) {
+            await new Promise(r => setTimeout(r, Math.random() * maxJitter));
+        }
+
+        // Retry with exponential backoff — but NOT for business-logic rejections.
+        // Only retry on server overload (429/503) or network failures.
+        const MAX_RETRIES = 3;
+        let lastError;
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const res = await fetch(`${API_BASE}/game/bet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ betType, betValue, amount }),
+                });
+
+                const data = await res.json();
+
+                // Don't retry on business-logic rejections — they won't change on retry
+                // e.g. "Betting closed", "Insufficient balance", "Round has ended"
+                if (res.status === 400 || res.status === 401) {
+                    return data;
+                }
+
+                // Retryable: server overloaded — wait and try again
+                if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
+                    const backoff = 600 * attempt; // 600ms, 1200ms
+                    await new Promise(r => setTimeout(r, backoff));
+                    continue;
+                }
+
+                return data;
+            } catch (err) {
+                // Network failure — retry
+                lastError = err;
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 600 * attempt));
+                }
+            }
+        }
+
+        throw lastError || new Error('Failed to place bet after retries');
     },
 
     // Bets

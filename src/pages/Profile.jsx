@@ -14,22 +14,20 @@ export default function Profile() {
 
     const loadData = async () => {
         try {
-            const userData = await api.getMe();
+            // Fire all 3 requests in parallel — ~2x faster than sequential
+            const [userData, betsData, transData] = await Promise.all([
+                api.getMe(),
+                api.getBetHistory(),
+                api.getTransactions(),
+            ]);
+
             if (userData.error) {
                 navigate('/login');
                 return;
             }
             setUser(userData.user);
-
-            const betsData = await api.getBetHistory();
-            if (!betsData.error) {
-                setBetHistory(betsData.bets);
-            }
-
-            const transData = await api.getTransactions();
-            if (!transData.error) {
-                setTransactions(transData);
-            }
+            if (!betsData.error) setBetHistory(betsData.bets);
+            if (!transData.error) setTransactions(transData);
         } catch (err) {
             navigate('/login');
         }

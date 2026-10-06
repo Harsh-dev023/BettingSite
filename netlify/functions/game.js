@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
 import { connectDB, User, Round, Bet } from './utils/db.js';
+import { getColor, getSize } from './utils/game-helpers.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -16,6 +17,15 @@ const headers = {
     'Access-Control-Allow-Credentials': 'true',
 };
 
+// Cache headers for read-only endpoints (GET /current)
+// CDN caches the response for 5s — 20 users polling at the same time all
+// get one shared cached response instead of 20 separate function calls.
+// 5s is short enough that the 60s round timer stays accurate within ±5s.
+const cachedHeaders = {
+    ...headers,
+    'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=2',
+};
+
 // Helper to get current round ID
 function getCurrentRoundId() {
     return Math.floor(Date.now() / 60000);
@@ -26,19 +36,6 @@ function getTimeLeft() {
     return 60 - (Math.floor(Date.now() / 1000) % 60);
 }
 
-// Helper to determine color from number
-function getColor(num) {
-    if ([1, 3, 7, 9].includes(num)) return 'green';
-    if ([2, 4, 6, 8].includes(num)) return 'red';
-    if ([0, 5].includes(num)) return 'violet';
-}
-
-// Helper to determine size from number
-function getSize(num) {
-    if ([6, 7, 8, 9].includes(num)) return 'big';
-    if ([0, 1, 2, 3, 4].includes(num)) return 'small';
-    if (num === 5) return 'violet';
-}
 
 export const handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
@@ -62,11 +59,12 @@ export const handler = async (event) => {
             })
                 .sort({ roundId: -1 })
                 .limit(20)
-                .select('roundId result color size');
+                .select('roundId result color size')
+                .lean();
 
             return {
                 statusCode: 200,
-                headers,
+                headers: cachedHeaders,   // CDN-cached for 5s
                 body: JSON.stringify({
                     roundId: currentRoundId,
                     timeLeft,
@@ -94,95 +92,82 @@ export const handler = async (event) => {
                 };
             }
 
-            const decoded = jwt.verify(token, JWT_SECRET);
-            const user = await User.findById(decoded.userId);
+            // Parse body first — fails immediately on bad input, before any DB work
+            let betType, betValue, amount;
+            try { ({ betType, betValue, amount } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
-            if (!user) {
-                return {
-                    statusCode: 401,
-                    headers,
-                    body: JSON.stringify({ error: 'User not found' }),
-                };
-            }
-
-            const { betType, betValue, amount } = JSON.parse(event.body);
-
-            // Validate bet
+            // Validate inputs before touching the database at all
             if (!betType || !amount || amount <= 0) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Invalid bet' }),
-                };
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid bet' }) };
             }
-
-            if (amount > user.balance) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Insufficient balance' }),
-                };
-            }
-
-            // Validate bet type
             const validBetTypes = ['green', 'red', 'violet', 'big', 'small', 'number'];
             if (!validBetTypes.includes(betType)) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Invalid bet type' }),
-                };
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid bet type' }) };
             }
-
             if (betType === 'number' && (betValue < 0 || betValue > 9)) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Invalid number' }),
-                };
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid number' }) };
             }
 
+            // Time check — fail fast before any DB call
             const currentRoundId = getCurrentRoundId();
-
-            // Check if more than 15 seconds left in current round
             const timeLeft = getTimeLeft();
             if (timeLeft <= 15) {
-                return {
-                    statusCode: 400,
-                    headers,
-                    body: JSON.stringify({ error: 'Betting closed - less than 15 seconds remaining' }),
-                };
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Betting closed - less than 15 seconds remaining' }) };
             }
 
-            // Check if round has ended
-            const existingRound = await Round.findOne({ roundId: currentRoundId });
+            const decoded = jwt.verify(token, JWT_SECRET);
+
+            // Run user fetch + round check in parallel — saves ~100ms per bet
+            const [user, existingRound] = await Promise.all([
+                User.findById(decoded.userId).select('balance bankDetails'),
+                Round.findOne({ roundId: currentRoundId }, { result: 1 }).lean(),
+            ]);
+
+            if (!user) {
+                return { statusCode: 401, headers, body: JSON.stringify({ error: 'User not found' }) };
+            }
             if (existingRound && existingRound.result !== null && existingRound.result !== undefined) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Round has ended' }) };
+            }
+
+            // Balance check
+            if (amount > user.balance) {
+                return { statusCode: 400, headers, body: JSON.stringify({ error: 'Insufficient balance' }) };
+            }
+
+            // Deduct balance atomically then create bet.
+            // If Bet.create fails, we refund the user so money is never lost.
+            await User.findByIdAndUpdate(user._id, { $inc: { balance: -amount } });
+
+            try {
+                await Bet.create({
+                    userId: user._id,
+                    roundId: currentRoundId,
+                    betType,
+                    betValue: betType === 'number' ? betValue : null,
+                    amount,
+                });
+            } catch (betErr) {
+                // Refund — bet record failed to create, restore balance
+                await User.findByIdAndUpdate(user._id, { $inc: { balance: amount } });
+                console.error('Bet.create failed, refunded user:', betErr);
                 return {
-                    statusCode: 400,
+                    statusCode: 500,
                     headers,
-                    body: JSON.stringify({ error: 'Round has ended' }),
+                    body: JSON.stringify({ error: 'Failed to place bet, amount refunded' }),
                 };
             }
 
-            // Deduct balance
-            user.balance -= amount;
-            await user.save();
-
-            // Create bet
-            await Bet.create({
-                userId: user._id,
-                roundId: currentRoundId,
-                betType,
-                betValue: betType === 'number' ? betValue : null,
-                amount,
-            });
+            // Fetch fresh balance to return accurate value
+            const updatedUser = await User.findById(user._id).select('balance').lean();
 
             return {
                 statusCode: 200,
                 headers,
                 body: JSON.stringify({
                     success: true,
-                    balance: user.balance,
+                    balance: updatedUser.balance,
                 }),
             };
         }

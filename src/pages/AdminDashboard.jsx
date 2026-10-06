@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 
@@ -62,28 +62,65 @@ export default function AdminDashboard() {
     const [error, setError] = useState('');
     const [editingUserId, setEditingUserId] = useState(null);
     const [editBalanceAmount, setEditBalanceAmount] = useState('');
+    const betsIntervalRef = useRef(null);
+    const slowIntervalRef = useRef(null);
     const navigate = useNavigate();
+
+    // Fast refresh: bets only, every 3 seconds — admin sees live bets instantly
+    const refreshBets = useCallback(async () => {
+        try {
+            const betsData = await api.getCurrentBets();
+            if (!betsData.error) setBets(betsData.bets);
+        } catch (err) {
+            // silent fail — don't disrupt admin UX
+        }
+    }, []);
+
+    // Slow refresh: recharges + withdrawals every 15 seconds
+    const refreshPending = useCallback(async () => {
+        try {
+            const [rechargesData, withdrawalsData] = await Promise.all([
+                api.getRecharges(),
+                api.getWithdrawals(),
+            ]);
+            if (!rechargesData.error) setRecharges(rechargesData.requests);
+            if (!withdrawalsData.error) setWithdrawals(withdrawalsData.requests);
+        } catch (err) {
+            // silent fail
+        }
+    }, []);
 
     useEffect(() => {
         loadData();
-    }, []);
 
+        // Start live bet polling every 3 seconds
+        betsIntervalRef.current = setInterval(refreshBets, 3000);
+        // Refresh recharges/withdrawals every 15 seconds
+        slowIntervalRef.current = setInterval(refreshPending, 15000);
+
+        return () => {
+            clearInterval(betsIntervalRef.current);
+            clearInterval(slowIntervalRef.current);
+        };
+    }, [refreshBets, refreshPending]);
+
+    // Full data load — runs once on mount and after actions like set-result
+    // Uses Promise.all so all 5 requests fire in parallel (~3x faster than sequential)
     const loadData = async () => {
         try {
-            const upiData = await api.getUPI();
+            const [upiData, usersData, rechargesData, withdrawalsData, betsData] = await Promise.all([
+                api.getUPI(),
+                api.getUsers(),
+                api.getRecharges(),
+                api.getWithdrawals(),
+                api.getCurrentBets(),
+            ]);
+
             setUpiId(upiData.upiId || '');
             setQrImage(upiData.qrImage || null);
-
-            const usersData = await api.getUsers();
             if (!usersData.error) setUsers(usersData.users);
-
-            const rechargesData = await api.getRecharges();
             if (!rechargesData.error) setRecharges(rechargesData.requests);
-
-            const withdrawalsData = await api.getWithdrawals();
             if (!withdrawalsData.error) setWithdrawals(withdrawalsData.requests);
-
-            const betsData = await api.getCurrentBets();
             if (!betsData.error) setBets(betsData.bets);
         } catch (err) {
             console.error('Failed to load data');
@@ -279,7 +316,56 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* UPI Settings */}
+                {/* Live Bets — auto-refreshes every 3s */}
+                <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold">Current Round Bets</h2>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">{bets.length} bet{bets.length !== 1 ? 's' : ''} • Pool: ₹{bets.reduce((s, b) => s + b.amount, 0).toFixed(2)}</span>
+                            <span className="flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block"></span>
+                                LIVE
+                            </span>
+                        </div>
+                    </div>
+                    {bets.length === 0 ? (
+                        <p className="text-gray-500 text-sm text-center py-4">No bets placed this round yet.</p>
+                    ) : (
+                        <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th className="p-2 text-left font-semibold text-gray-600">Phone</th>
+                                        <th className="p-2 text-left font-semibold text-gray-600">Type</th>
+                                        <th className="p-2 text-left font-semibold text-gray-600">Value</th>
+                                        <th className="p-2 text-right font-semibold text-gray-600">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {bets.map((bet) => (
+                                        <tr key={bet._id} className="border-b hover:bg-gray-50">
+                                            <td className="p-2 font-mono text-xs">{bet.userId?.phone || '—'}</td>
+                                            <td className="p-2">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold text-white ${
+                                                    bet.betType === 'green' ? 'bg-green-500' :
+                                                    bet.betType === 'red' ? 'bg-red-500' :
+                                                    bet.betType === 'violet' ? 'bg-purple-500' :
+                                                    bet.betType === 'big' ? 'bg-orange-500' :
+                                                    bet.betType === 'small' ? 'bg-blue-500' :
+                                                    'bg-gray-500'
+                                                }`}>{bet.betType.toUpperCase()}</span>
+                                            </td>
+                                            <td className="p-2">{bet.betType === 'number' ? bet.betValue : '—'}</td>
+                                            <td className="p-2 text-right font-semibold">₹{bet.amount.toFixed(2)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <h2 className="text-xl font-bold mb-4">UPI Settings</h2>
                     <div className="flex flex-col gap-4">
@@ -549,33 +635,7 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Current Round Bets */}
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-bold mb-4">Current Round Bets</h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-100">
-                                <tr>
-                                    <th className="p-2 text-left">Phone</th>
-                                    <th className="p-2 text-left">Type</th>
-                                    <th className="p-2 text-left">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {bets.map((bet) => (
-                                    <tr key={bet._id} className="border-b">
-                                        <td className="p-2">{bet.userId?.phone}</td>
-                                        <td className="p-2">{bet.betType}{bet.betValue !== null ? ` (${bet.betValue})` : ''}</td>
-                                        <td className="p-2">₹{bet.amount}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {bets.length === 0 && (
-                            <p className="text-center text-gray-500 py-4">No bets yet</p>
-                        )}
-                    </div>
-                </div>
+                {/* Bets are shown in the Live Bets panel above */}
             </div>
         </div>
     );

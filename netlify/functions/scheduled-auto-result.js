@@ -7,44 +7,46 @@ const headers = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
 
-// getColor, getSize, calculateWinnings are imported from utils/game-helpers.js
-
 // This is the scheduled function that runs every minute
 export const handler = async (event) => {
-    console.log('Scheduled auto-result triggered at:', new Date().toISOString());
+    const previousRoundId = Math.floor(Date.now() / 60000) - 1;
+    console.log('Scheduled auto-result triggered at:', new Date().toISOString(), '| Round:', previousRoundId);
 
     await connectDB();
 
     try {
-        // Get the previous round (current time - 1 minute)
-        const previousRoundId = Math.floor(Date.now() / 60000) - 1;
+        // ─── FAST PATH: Check if this round already has a result ──────────────
+        // Uses lean() + only fetches the result field — extremely cheap query.
+        // 99% of the time this will be true (admin already set result),
+        // so we exit immediately without doing any heavy work.
+        const existingResult = await Round.findOne(
+            { roundId: previousRoundId, result: { $ne: null } },
+            { result: 1 }          // only fetch the result field
+        ).lean();                  // plain JS object, skips Mongoose overhead
 
-        console.log('Checking round:', previousRoundId);
-
-        // Check if this round already has a result
-        const existingRound = await Round.findOne({ roundId: previousRoundId });
-
-        if (existingRound && existingRound.result !== null && existingRound.result !== undefined) {
-            console.log('Round already has result:', existingRound.result);
+        if (existingResult) {
+            console.log('✓ Round already resolved, result:', existingResult.result, '— skipping.');
             return {
                 statusCode: 200,
                 headers,
                 body: JSON.stringify({
                     message: 'Round already has result',
                     roundId: previousRoundId,
-                    result: existingRound.result
+                    result: existingResult.result,
                 }),
             };
         }
 
-        // Generate random result (0-9)
+        // ─── SLOW PATH: Round has no result yet — auto-generate one ──────────
         const randomResult = Math.floor(Math.random() * 10);
         const color = getColor(randomResult);
         const size = getSize(randomResult);
 
-        console.log('Auto-generating result:', randomResult);
+        console.log('Auto-generating result:', randomResult, color, size);
 
-        // Save the result
+        // Fetch full doc only when we actually need to write
+        const existingRound = await Round.findOne({ roundId: previousRoundId });
+
         if (!existingRound) {
             await Round.create({
                 roundId: previousRoundId,
@@ -61,36 +63,33 @@ export const handler = async (event) => {
             await existingRound.save();
         }
 
-        // Calculate winnings
+        // Calculate and credit winnings for this round
         await calculateWinnings(previousRoundId, randomResult);
 
-        // Database cleanup - keep only last 20 rounds
-        const totalRounds = await Round.countDocuments();
-        if (totalRounds > 20) {
-            console.log('Cleaning up old rounds, total:', totalRounds);
+        // ─── CLEANUP: Only run every 10th round to save DB ops ───────────────
+        // previousRoundId is a unix-minute timestamp. Modulo 10 means cleanup
+        // runs roughly every 10 minutes instead of every minute — same result,
+        // 90% fewer cleanup queries.
+        if (previousRoundId % 10 === 0) {
+            console.log('Running periodic cleanup...');
 
-            // Get the 20 most recent round IDs
             const recentRounds = await Round.find()
                 .sort({ roundId: -1 })
                 .limit(20)
-                .select('roundId');
+                .select('roundId')
+                .lean();
 
             const recentRoundIds = recentRounds.map(r => r.roundId);
 
-            // Delete all rounds not in the recent 20
-            const deletedRounds = await Round.deleteMany({
-                roundId: { $nin: recentRoundIds }
-            });
+            const [deletedRounds, deletedBets] = await Promise.all([
+                Round.deleteMany({ roundId: { $nin: recentRoundIds } }),
+                Bet.deleteMany({ roundId: { $nin: recentRoundIds } }),
+            ]);
 
-            // Also cleanup associated bets for deleted rounds
-            const deletedBets = await Bet.deleteMany({
-                roundId: { $nin: recentRoundIds }
-            });
-
-            console.log(`Cleanup complete: Deleted ${deletedRounds.deletedCount} rounds and ${deletedBets.deletedCount} bets`);
+            console.log(`Cleanup: removed ${deletedRounds.deletedCount} rounds, ${deletedBets.deletedCount} bets`);
         }
 
-        console.log('Scheduled auto result set successfully');
+        console.log('✓ Auto result set successfully for round', previousRoundId);
 
         return {
             statusCode: 200,

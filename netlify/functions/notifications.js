@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
-import { connectDB, User, Notification } from './utils/db.js';
+import { connectDB, Notification } from './utils/db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -39,34 +39,29 @@ export const handler = async (event) => {
         }
 
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await User.findById(decoded.userId);
-
-        if (!user) {
-            return {
-                statusCode: 401,
-                headers,
-                body: JSON.stringify({ error: 'User not found' }),
-            };
+        // Use userId directly from JWT — no need to DB-fetch the user
+        // since we only need the ID for notification queries
+        const userId = decoded.userId;
+        if (!userId) {
+            return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid token' }) };
         }
 
         // GET / - Get user's active notifications
         if (event.httpMethod === 'GET' && path === '') {
-            // Find notifications that:
-            // 1. Are for all users (targetUsers is empty) OR target this specific user
-            // 2. Have NOT been dismissed by this user
             const notifications = await Notification.find({
                 $and: [
                     {
                         $or: [
-                            { targetUsers: { $size: 0 } }, // For all users
-                            { targetUsers: user._id }      // For this specific user
+                            { targetUsers: { $size: 0 } },
+                            { targetUsers: userId }
                         ]
                     },
-                    {
-                        dismissedBy: { $ne: user._id }  // Not dismissed by this user
-                    }
+                    { dismissedBy: { $ne: userId } }
                 ]
-            }).sort({ createdAt: -1 });
+            })
+            .select('message createdAt')
+            .sort({ createdAt: -1 })
+            .lean();
 
             return {
                 statusCode: 200,
@@ -88,11 +83,11 @@ export const handler = async (event) => {
                 };
             }
 
-            // Add user to dismissedBy array if not already there
-            if (!notification.dismissedBy.includes(user._id)) {
-                notification.dismissedBy.push(user._id);
-                await notification.save();
-            }
+            // Use $addToSet to atomically add userId — avoids duplicate check + save round-trip
+            await Notification.updateOne(
+                { _id: notificationId },
+                { $addToSet: { dismissedBy: userId } }
+            );
 
             return {
                 statusCode: 200,
