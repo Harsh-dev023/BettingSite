@@ -122,12 +122,15 @@ export default function Game() {
             setLastResults(data.lastResults || []);
 
             // Decide next fetch delay:
-            // If the timer is very low (<= 3 seconds) OR if a new round just started but we haven't got the result yet,
-            // poll every 1 second so the user gets the result instantly.
-            // Otherwise, poll every 5 seconds to save server resources.
+            // Fast poll (1s) in 3 windows:
+            //  1. Last 8 seconds of a round — catches result the moment it lands
+            //  2. First 5 seconds of a new round — catches late-arriving result instantly
+            //  3. Any time we're still waiting for a result from a previous round
+            const isNewRound = data.timeLeft > 55;           // round just flipped
+            const isEndOfRound = data.timeLeft <= 8;          // about to end
             const isWaitingForResult = latestResult === null || latestResult.roundId < (data.roundId - 1);
 
-            if (data.timeLeft <= 3 || isWaitingForResult) {
+            if (isEndOfRound || isNewRound || isWaitingForResult) {
                 scheduleNextFetch(1000);
             } else {
                 scheduleNextFetch(5000);
@@ -145,7 +148,7 @@ export default function Game() {
         setLoading(true);
 
         try {
-            const data = await api.placeBet(betType, betValue, parseFloat(amount));
+            const data = await api.placeBet(betType, betValue, parseFloat(amount), timeLeft);
             if (data.error) {
                 setError(data.error);
             } else {

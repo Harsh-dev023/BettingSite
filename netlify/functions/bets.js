@@ -51,7 +51,9 @@ export const handler = async (event) => {
 
         // POST /recharge - Submit recharge request
         if (event.httpMethod === 'POST' && path === '/recharge') {
-            const { amount, transactionId } = JSON.parse(event.body);
+            let amount, transactionId;
+            try { ({ amount, transactionId } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
             const parsedAmount = parseFloat(amount);
 
             // Enforce minimum recharge of 10 and valid transactionId
@@ -78,7 +80,9 @@ export const handler = async (event) => {
 
         // POST /withdraw - Submit withdrawal request
         if (event.httpMethod === 'POST' && path === '/withdraw') {
-            const { amount } = JSON.parse(event.body);
+            let amount;
+            try { ({ amount } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             if (!amount || amount <= 0) {
                 return {
@@ -104,25 +108,44 @@ export const handler = async (event) => {
                 };
             }
 
-            // Deduct balance
-            user.balance -= amount;
-            await user.save();
+            // Create the record FIRST (no money moved yet)
+            // Then deduct atomically. If deduct somehow fails, record exists but
+            // balance is intact — admin can manually void if needed. This is far
+            // safer than deducting first and losing money if create fails.
+            let withdrawalRecord;
+            try {
+                withdrawalRecord = await WithdrawalRequest.create({
+                    userId: user._id,
+                    amount,
+                });
+            } catch (createErr) {
+                console.error('WithdrawalRequest.create failed:', createErr);
+                return {
+                    statusCode: 500,
+                    headers,
+                    body: JSON.stringify({ error: 'Failed to submit withdrawal, no money deducted' }),
+                };
+            }
 
-            await WithdrawalRequest.create({
-                userId: user._id,
-                amount,
-            });
+            // Now safely deduct
+            const updated = await User.findByIdAndUpdate(
+                user._id,
+                { $inc: { balance: -amount } },
+                { new: true }
+            ).select('balance').lean();
 
             return {
                 statusCode: 200,
                 headers,
-                body: JSON.stringify({ success: true, balance: user.balance }),
+                body: JSON.stringify({ success: true, balance: updated.balance }),
             };
         }
 
         // POST /save-bank - Save bank details
         if (event.httpMethod === 'POST' && path === '/save-bank') {
-            const { accountNumber, ifsc, accountHolder } = JSON.parse(event.body);
+            let accountNumber, ifsc, accountHolder;
+            try { ({ accountNumber, ifsc, accountHolder } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             if (!accountNumber || !ifsc || !accountHolder) {
                 return {

@@ -30,7 +30,9 @@ export const handler = async (event) => {
     try {
         // POST /register
         if (event.httpMethod === 'POST' && path === '/register') {
-            const { phone, password } = JSON.parse(event.body);
+            let phone, password;
+            try { ({ phone, password } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             // Validate phone (10 digits)
             if (!phone || !/^\d{10}$/.test(phone)) {
@@ -102,7 +104,9 @@ export const handler = async (event) => {
 
         // POST /login
         if (event.httpMethod === 'POST' && path === '/login') {
-            const { phone, password } = JSON.parse(event.body);
+            let phone, password;
+            try { ({ phone, password } = JSON.parse(event.body || '{}')); }
+            catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid request body' }) }; }
 
             // Validate phone
             if (!phone || !/^\d{10}$/.test(phone)) {
@@ -179,7 +183,8 @@ export const handler = async (event) => {
 
             try {
                 const decoded = jwt.verify(token, JWT_SECRET);
-                const user = await User.findById(decoded.userId);
+                const user = await User.findById(decoded.userId)
+                    .select('phone balance bankDetails').lean();
 
                 if (!user) {
                     return {

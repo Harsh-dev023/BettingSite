@@ -33,11 +33,6 @@ async function connectDB() {
             retryReads: true,
         };
 
-        // Reset any stale connection before reconnecting
-        if (mongoose.connection.readyState !== 0) {
-            await mongoose.disconnect();
-        }
-
         cached.promise = mongoose.connect(uri, opts).then((m) => m);
     }
 
