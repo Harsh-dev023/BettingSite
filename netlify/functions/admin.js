@@ -251,13 +251,33 @@ export const handler = async (event) => {
             };
         }
 
-        // GET /recharges - List pending recharge requests (pending first, then recent approved/rejected)
+        // GET /recharges - List recharge requests (pending first, then recent approved/rejected)
         if (event.httpMethod === 'GET' && path === '/recharges') {
-            const requests = await RechargeRequest.find()
-                .populate('userId', 'phone')
-                .sort({ status: 1, createdAt: -1 }) // pending sorts before approved/rejected alphabetically
-                .limit(100)
-                .lean();
+            const statusFilter = event.queryStringParameters?.status;
+            let requests;
+
+            if (statusFilter && statusFilter !== 'all') {
+                requests = await RechargeRequest.find({ status: statusFilter })
+                    .populate('userId', 'phone')
+                    .sort({ createdAt: -1 })
+                    .limit(100)
+                    .lean();
+            } else {
+                // Fetch ALL pending requests so they never get pushed out by limit,
+                // followed by the most recent processed requests
+                const [pending, processed] = await Promise.all([
+                    RechargeRequest.find({ status: 'pending' })
+                        .populate('userId', 'phone')
+                        .sort({ createdAt: -1 })
+                        .lean(),
+                    RechargeRequest.find({ status: { $ne: 'pending' } })
+                        .populate('userId', 'phone')
+                        .sort({ createdAt: -1 })
+                        .limit(100)
+                        .lean(),
+                ]);
+                requests = [...pending, ...processed];
+            }
 
             return {
                 statusCode: 200,
@@ -309,13 +329,33 @@ export const handler = async (event) => {
             };
         }
 
-        // GET /withdrawals - List withdrawal requests
+        // GET /withdrawals - List withdrawal requests (pending first, then recent approved/rejected)
         if (event.httpMethod === 'GET' && path === '/withdrawals') {
-            const requests = await WithdrawalRequest.find()
-                .populate('userId', 'phone bankDetails')
-                .sort({ status: 1, createdAt: -1 }) // pending first
-                .limit(100)
-                .lean();
+            const statusFilter = event.queryStringParameters?.status;
+            let requests;
+
+            if (statusFilter && statusFilter !== 'all') {
+                requests = await WithdrawalRequest.find({ status: statusFilter })
+                    .populate('userId', 'phone bankDetails')
+                    .sort({ createdAt: -1 })
+                    .limit(100)
+                    .lean();
+            } else {
+                // Fetch ALL pending requests so they never get pushed out by limit,
+                // followed by the most recent processed requests
+                const [pending, processed] = await Promise.all([
+                    WithdrawalRequest.find({ status: 'pending' })
+                        .populate('userId', 'phone bankDetails')
+                        .sort({ createdAt: -1 })
+                        .lean(),
+                    WithdrawalRequest.find({ status: { $ne: 'pending' } })
+                        .populate('userId', 'phone bankDetails')
+                        .sort({ createdAt: -1 })
+                        .limit(100)
+                        .lean(),
+                ]);
+                requests = [...pending, ...processed];
+            }
 
             return {
                 statusCode: 200,
